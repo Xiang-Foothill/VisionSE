@@ -59,7 +59,7 @@ def avg_Vego(f_op, preImg, nextImg, deltaT):
     return V
 
 def V_test():
-    images, real_V = du.parse_barc_data(dataset_path= 'VideoSet/ParaDriveLocalComparison_Sep7_0.npz')
+    images, real_V = du.parse_barc_data(dataset_path= 'e:/VisionSE/VideoSet/ParaDriveLocalComparison_Sep7_0.npz')
     deltaT = 0.1
     op_V = []
     sample_size = 30

@@ -6,7 +6,7 @@ import cv2
 # FRAMES: a list of numpy arrays
 # DELTAT: the time interval between two consecutive frames
 #MAXIM: the maxmimum number of images to be included in the returned frame list
-def VideoToFrame(path = "VideoSet/testVideo1.mp4", maxIm = 400):
+def VideoToFrame(path = "e:/VisionSE/VideoSet/testVideo1.mp4", maxIm = 400):
     """Apply cv2 VideoCapture Project to transform a mp4 video into
     a list of frames, where each frame is represented by a numpy array"""
 
