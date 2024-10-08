@@ -37,6 +37,21 @@ def cv_featureLK(preImg, nextImg, deltaT):
     flow = (good_new - good_old) / deltaT
     return good_old, good_new, flow
 
+# return: a mask array representing whether each pixel is a part of the ground or not
+def G_cutoff(img: np.array) -> np.array:
+    """find which part of the img is ground (True) and which part is not (False)
+    this function cuts of an area from the bottom of the image, and assume all the pixels in that area are part of the ground
+    return a boolean mask array"""
+    H, W = img.shape[0], img.shape[1]
+    # define the height and width of the ground zone
+    ground_H = 180
+    ground_W = 500
+    bottom_center = 320
+
+    mask = np.zeros(shape = (H, W), dtype = bool)
+    mask[H - ground_H : H, int(bottom_center - ground_W / 2) : int(bottom_center + ground_W / 2)] = True
+    return mask
+
 # f_op: the optical flow function to be used
 # deltaT: the time constant between two consecutive frames
 def avg_Vego(f_op, preImg, nextImg, deltaT):
@@ -47,8 +62,8 @@ def avg_Vego(f_op, preImg, nextImg, deltaT):
     
     find the egomotion velocity by averaging the calculated velocities of all the output flow points given by the f_op function"""
     # camera parameters
-    h = 0.1 # the height of the camera from the horizontal graound 
-    f = 607 # focal length in terms of pixels - [pixels]
+    h = 0.123 # the height of the camera from the horizontal graound 
+    f = 605.5 # focal length in terms of pixels - [pixels]
 
     good_old, good_new, flow = f_op(preImg, nextImg, deltaT)
 
@@ -59,7 +74,7 @@ def avg_Vego(f_op, preImg, nextImg, deltaT):
     return V
 
 def V_test():
-    images, real_V = du.parse_barc_data(dataset_path= 'ParaDriveLocalComparison_Sep7_0.npz')
+    images, real_V = du.parse_barc_data()
     deltaT = 0.1
     op_V = []
     sample_size = 30
@@ -74,6 +89,16 @@ def V_test():
     plt.legend()
     plt.show()
 
+def test_ground_mask():
+    images, real_V = du.parse_barc_data()
+    index = np.random.randint(low = 0, high = images.shape[0])
+    img = images[index]
+    img = img.copy()
+    mask = G_cutoff(img)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    img[mask] = 0
+    cv2.imshow("image with the ground labeled", img)
+    cv2.waitKey(0)
 
 def __main__():
     # Frames, deltaT = vu.VideoToFrame(maxIm = 10)
@@ -82,7 +107,8 @@ def __main__():
     # image = vu.drawFlow(Frames[0], old, new)
     # cv2.imwrite("result1.jpg", image)
 
-    V_test()
+    # V_test()
+    test_ground_mask()
 
 if __name__ == "__main__":
     __main__()

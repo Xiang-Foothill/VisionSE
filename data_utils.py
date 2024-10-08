@@ -5,7 +5,7 @@ import cv2
 from matplotlib import pyplot as plt
 import os
 
-def parse_barc_data(dataset_path = "ParaDriveLocalComparison_Sep7_0.npz") -> Tuple[np.ndarray, np.ndarray]:
+def parse_barc_data(dataset_path = "ParaDriveLocalComparison_Oct1_enc_0.npz") -> Tuple[np.ndarray, np.ndarray]:
     """
     
     @param dataset_path: Path to the dataset npz file. 
@@ -47,9 +47,9 @@ def to_cvChannels(img):
     numpy format:[N, channels, height, wdith]"""
     N, h, w = img.shape[0], img.shape[2], img.shape[3]
     cv2_img = np.zeros(shape = (N, h, w, 3))
-    cv2_img[:, :, :, 0] = img[:, 0, :, :]
+    cv2_img[:, :, :, 0] = img[:, 2, :, :]
     cv2_img[:, :, :, 1] = img[:, 1, :, :]
-    cv2_img[:, :, :, 2] = img[:, 2, :, :]
+    cv2_img[:, :, :, 2] = img[:, 0, :, :]
     return np.uint8(cv2_img)
 
 # if __name__ == '__main__':
