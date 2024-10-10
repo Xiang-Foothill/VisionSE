@@ -10,22 +10,16 @@ def cv_featureLK(preImg, nextImg, deltaT):
     Method to calculate the optical-flow between two consecutive frames
     1. find all coordinates of the points with good features to be tracked
     2. calculate the optical-flow values of these points"""
-
+    
     # set the parameters for Lukas-Kanade method
     lk_params = dict( winSize  = (15, 15),
                   maxLevel = 2)
-    
-    # find the points with good features to be tracked
-    feature_params = dict( maxCorners = 100,
-                       qualityLevel = 0.3,
-                       minDistance = 7,
-                       blockSize = 7 )
     
     # convert the images into grayscale
     old_gray = cv2.cvtColor(preImg, cv2.COLOR_BGR2GRAY)
     new_Gray = cv2.cvtColor(nextImg, cv2.COLOR_BGR2GRAY)
 
-    p0 = cv2.goodFeaturesToTrack(old_gray, mask = None, **feature_params)
+    p0 = get_Trackpoints(old_gray)
 
     #Calculate the values of the optical Flow
     p1, st, err = cv2.calcOpticalFlowPyrLK(old_gray, new_Gray, p0, None,  **lk_params)
@@ -36,6 +30,33 @@ def cv_featureLK(preImg, nextImg, deltaT):
     
     flow = (good_new - good_old) / deltaT
     return good_old, good_new, flow
+
+def get_Trackpoints(img):
+    # specify the function used to detect the ground
+    f_ground = G_cutoff
+
+    # find the points with good features to be tracked
+    feature_params = dict( maxCorners = 100,
+                       qualityLevel = 0.3,
+                       minDistance = 7,
+                       blockSize = 7,
+                       gradientSize = 3)
+    
+    #use the ground_function to get the ground mask
+    ground_mask = f_ground(img).astype(np.uint8)
+
+    p0 = cv2.goodFeaturesToTrack(img, mask = ground_mask, **feature_params)
+
+    if p0 is None:
+        #deal with the case when p0 is None, i.e. no good features are detected, just return random points on the ground
+        # P = 0.1
+        # rand_points = np.random.uniform(low = 0, high = 1, size = (img.shape[0], img.shape[1]))
+        # rand_mask = rand_points > P
+        # mask = np.logical_and(rand_mask, ground_mask)
+        # return np.float32(np.argwhere(mask == True))
+        return cv2.goodFeaturesToTrack(img, mask = None, **feature_params)
+    else:
+        return p0
 
 # return: a mask array representing whether each pixel is a part of the ground or not
 def G_cutoff(img: np.array) -> np.array:
@@ -67,6 +88,7 @@ def avg_Vego(f_op, preImg, nextImg, deltaT):
 
     good_old, good_new, flow = f_op(preImg, nextImg, deltaT)
 
+    print(good_old)
     Vx, Vy, x, y = flow[:, 0], flow[:, 1], good_old[:, 0], good_old[:, 1]
     v1 = (Vx * h * f) / (x * y)
     v2 = (Vy * h * f) / (y * y)
@@ -89,26 +111,30 @@ def V_test():
     plt.legend()
     plt.show()
 
-def test_ground_mask():
+# test the ground detection function
+# draw_arrow == True when want to test it by drawing flows
+# draw_arrow == False when want to test it by blacking out the ground area
+def test_ground_mask(draw_arrow = True):
     images, real_V = du.parse_barc_data()
     index = np.random.randint(low = 0, high = images.shape[0])
-    img = images[index]
-    img = img.copy()
-    mask = G_cutoff(img)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    img[mask] = 0
-    cv2.imshow("image with the ground labeled", img)
-    cv2.waitKey(0)
+    preImg, nextImg = images[index], images[index + 1]
+    if draw_arrow:
+        deltaT = 0.1
+        good_old, good_new, flow = cv_featureLK(preImg, nextImg, deltaT)
+        vu.drawFlow(preImg, good_old, good_new)
+    else:
+        preImg = preImg.copy()
+        mask = G_cutoff(preImg)
+        img = cv2.cvtColor(preImg, cv2.COLOR_BGR2GRAY)
+        img[mask] = 0
+        cv2.imshow("image with the ground labeled", img)
+        cv2.waitKey(0)
 
 def __main__():
-    # Frames, deltaT = vu.VideoToFrame(maxIm = 10)
-    # old, new, _ = cv_featureLK(Frames[0], Frames[1], deltaT)
-    # print(old.shape)
-    # image = vu.drawFlow(Frames[0], old, new)
     # cv2.imwrite("result1.jpg", image)
 
-    # V_test()
-    test_ground_mask()
+    V_test()
+    # test_ground_mask(draw_arrow = True)
 
 if __name__ == "__main__":
     __main__()

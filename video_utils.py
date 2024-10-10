@@ -32,7 +32,7 @@ def VideoToFrame(path = "e:/VisionSE/VideoSet/testVideo1.mp4", maxIm = 400):
 # new_points: the 2D coordinates of old_points after the shifting of their optical flow
 def drawFlow(oldImg, old_points, new_points):
     """draw the optical_flow of old_points on oldImg"""
-    thickness = 3
+    thickness = 2
     color = (0, 255, 0)
     image = oldImg
     for i, op in enumerate(old_points):
