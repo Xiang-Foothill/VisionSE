@@ -44,7 +44,6 @@ def get_Trackpoints(img):
     
     #use the ground_function to get the ground mask
     ground_mask = f_ground(img).astype(np.uint8)
-
     p0 = cv2.goodFeaturesToTrack(img, mask = ground_mask, **feature_params)
 
     if p0 is None:
@@ -88,18 +87,24 @@ def avg_Vego(f_op, preImg, nextImg, deltaT):
 
     good_old, good_new, flow = f_op(preImg, nextImg, deltaT)
 
-    print(good_old)
     Vx, Vy, x, y = flow[:, 0], flow[:, 1], good_old[:, 0], good_old[:, 1]
     v1 = (Vx * h * f) / (x * y)
     v2 = (Vy * h * f) / (y * y)
     V = - (np.average(v1) + np.average(v2)) / 2
+
+    #check if the observed velocity is abnormal, if the velocity measured is abnormal, set it to 1
+    abnormal_threshold = 10
+    default_V = 1
+    if abs(V) > abnormal_threshold:
+        V = default_V
+    
     return V
 
 def V_test():
     images, real_V = du.parse_barc_data()
     deltaT = 0.1
     op_V = []
-    sample_size = 30
+    sample_size = 60
 
     for i in range(0, sample_size):
         pre_img, next_img = images[i], images[i + 1]
