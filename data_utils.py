@@ -4,8 +4,12 @@ from pathlib import Path
 import cv2
 from matplotlib import pyplot as plt
 import os
+BARC_PATH = "ParaDriveLocalComparison_Oct1_enc_0.npz"
+CARLA_PATH = "carlaData1.pkl"
+BARC_H = 0.123 # the height of the camera from the horizontal graound 
+BARC_F = 605.5 # focal length in terms of pixels - [pixels]
 
-def parse_barc_data(dataset_path = "ParaDriveLocalComparison_Oct1_enc_0.npz") -> Tuple[np.ndarray, np.ndarray]:
+def parse_barc_data(dataset_path = CARLA_PATH) -> Tuple[np.ndarray, np.ndarray]:
     """
     
     @param dataset_path: Path to the dataset npz file. 
@@ -39,8 +43,11 @@ def parse_barc_data(dataset_path = "ParaDriveLocalComparison_Oct1_enc_0.npz") ->
 
     # return images, states[:, 0]  # longitudinal velocity mangnitude 
     images = to_cvChannels(images)
-    return images, np.linalg.norm(states[:, :2], axis=1)  # velocity magnitude 
-
+    if "F" in data:
+        return images, np.linalg.norm(states[:, :2], axis=1), data["F"], data["sensor_height"]  # velocity magnitude 
+    else:
+        return images, np.linalg.norm(states[:, :2], axis=1), BARC_F, BARC_H
+    
 def to_cvChannels(img):
     """convert the RGB image from the numpy format to the cv2 format
     cv2 format: [N, height, width, channels]
@@ -51,6 +58,23 @@ def to_cvChannels(img):
     cv2_img[:, :, :, 1] = img[:, 1, :, :]
     cv2_img[:, :, :, 2] = img[:, 0, :, :]
     return np.uint8(cv2_img)
+
+def BGRA2RGB(img):
+    """format of BGRA: [width, height, channels = 4]
+    formate of RGB: [channels = 3, width, height]"""
+    img = img[:, :, :4]
+    w, h = img.shape[0], img.shape[1]
+    np_rgb = np.zeros(shape = (3, w, h))
+
+    np_rgb[0, :, :] = img[:, :, 2]
+    np_rgb[1, :, :] = img[:, :, 1]
+    np_rgb[2, :, :] = img[:, :, 0]
+    return np_rgb
+
+def random_image_test(images):
+    im = images[np.random.randint(low = 0, high = images.shape[0])]
+    imgplot = plt.imshow(im[1, :, :])
+    plt.show()
 
 # if __name__ == '__main__':
 #     parse_barc_data(Path.cwd() / 'ParaDriveLocalComparison_Sep7_0.npz')

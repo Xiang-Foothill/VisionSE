@@ -44,6 +44,7 @@ def get_Trackpoints(img):
     
     #use the ground_function to get the ground mask
     ground_mask = f_ground(img).astype(np.uint8)
+    ground_mask = None
     p0 = cv2.goodFeaturesToTrack(img, mask = ground_mask, **feature_params)
 
     if p0 is None:
@@ -69,28 +70,38 @@ def G_cutoff(img: np.array) -> np.array:
     bottom_center = 320
 
     mask = np.zeros(shape = (H, W), dtype = bool)
+    # mask[:200, :100] = True
     mask[H - ground_H : H, int(bottom_center - ground_W / 2) : int(bottom_center + ground_W / 2)] = True
     return mask
 
+# coord: the coordinates of the pixels to be changed
+def recenter(coord):
+    """relocate the origin of the pixel system to the center of the image plane
+    the original pixel system takes the top-left corner as (0, 0)"""
+    W = 640
+    H = 480
+    coord[:, 0] = H * 0.5 - coord[:, 0]
+    coord[:, 1] = coord[:, 1] - W * 0.5
+
+    return coord
+
+
 # f_op: the optical flow function to be used
 # deltaT: the time constant between two consecutive frames
-def avg_Vego(f_op, preImg, nextImg, deltaT):
+def avg_Vego(f_op, preImg, nextImg, deltaT, h, f):
     """recover the egomotion from the image velocity
     Use the simplified version of plane-motion-filed equation (emega is ignored): 
     Vx = (v * x * y) / (h * f)
     Vy = (v * y ^ 2) / (h * f)
     
     find the egomotion velocity by averaging the calculated velocities of all the output flow points given by the f_op function"""
-    # camera parameters
-    h = 0.123 # the height of the camera from the horizontal graound 
-    f = 605.5 # focal length in terms of pixels - [pixels]
-
     good_old, good_new, flow = f_op(preImg, nextImg, deltaT)
+    good_old, good_new = recenter(good_old), recenter(good_new)
 
     Vx, Vy, x, y = flow[:, 0], flow[:, 1], good_old[:, 0], good_old[:, 1]
     v1 = (Vx * h * f) / (x * y)
     v2 = (Vy * h * f) / (y * y)
-    V = - (np.average(v1) + np.average(v2)) / 2
+    V = abs((np.average(v1) + np.average(v2)) / 2)
 
     #check if the observed velocity is abnormal, if the velocity measured is abnormal, set it to 1
     abnormal_threshold = 10
@@ -101,14 +112,14 @@ def avg_Vego(f_op, preImg, nextImg, deltaT):
     return V
 
 def V_test():
-    images, real_V = du.parse_barc_data()
+    images, real_V, f, h = du.parse_barc_data()
     deltaT = 0.1
     op_V = []
-    sample_size = 60
+    sample_size = 100
 
     for i in range(0, sample_size):
         pre_img, next_img = images[i], images[i + 1]
-        V = avg_Vego(cv_featureLK, pre_img, next_img, deltaT)
+        V = avg_Vego(cv_featureLK, pre_img, next_img, deltaT, h, f)
         op_V.append(V)
     real_V = real_V[: sample_size]
     plt.plot(real_V, label = "real_V")
@@ -120,7 +131,7 @@ def V_test():
 # draw_arrow == True when want to test it by drawing flows
 # draw_arrow == False when want to test it by blacking out the ground area
 def test_ground_mask(draw_arrow = True):
-    images, real_V = du.parse_barc_data()
+    images, real_V, f, h = du.parse_barc_data()
     index = np.random.randint(low = 0, high = images.shape[0])
     preImg, nextImg = images[index], images[index + 1]
     if draw_arrow:
@@ -137,7 +148,7 @@ def test_ground_mask(draw_arrow = True):
 
 def __main__():
     # cv2.imwrite("result1.jpg", image)
-
+    # test_ground_mask(False)
     V_test()
     # test_ground_mask(draw_arrow = True)
 
