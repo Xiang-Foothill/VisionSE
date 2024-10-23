@@ -8,6 +8,7 @@ BARC_PATH = "ParaDriveLocalComparison_Oct1_enc_0.npz"
 CARLA_PATH = "carlaData1.pkl"
 BARC_H = 0.123 # the height of the camera from the horizontal graound 
 BARC_F = 605.5 # focal length in terms of pixels - [pixels]
+BARC_T = 0.1
 
 def parse_barc_data(dataset_path = CARLA_PATH) -> Tuple[np.ndarray, np.ndarray]:
     """
@@ -44,9 +45,9 @@ def parse_barc_data(dataset_path = CARLA_PATH) -> Tuple[np.ndarray, np.ndarray]:
     # return images, states[:, 0]  # longitudinal velocity mangnitude 
     images = to_cvChannels(images)
     if "F" in data:
-        return images, np.linalg.norm(states[:, :2], axis=1), data["F"], data["sensor_height"]  # velocity magnitude 
+        return images, np.linalg.norm(states[:, :2], axis=1), data["F"], data["sensor_height"], data["T"]  # velocity magnitude 
     else:
-        return images, np.linalg.norm(states[:, :2], axis=1), BARC_F, BARC_H
+        return images, np.linalg.norm(states[:, :2], axis=1), BARC_F, BARC_H, BARC_T
     
 def to_cvChannels(img):
     """convert the RGB image from the numpy format to the cv2 format

@@ -13,7 +13,8 @@ def cv_featureLK(preImg, nextImg, deltaT):
     
     # set the parameters for Lukas-Kanade method
     lk_params = dict( winSize  = (15, 15),
-                  maxLevel = 2)
+                  maxLevel = 2,
+                  criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
     
     # convert the images into grayscale
     old_gray = cv2.cvtColor(preImg, cv2.COLOR_BGR2GRAY)
@@ -39,8 +40,7 @@ def get_Trackpoints(img):
     feature_params = dict( maxCorners = 100,
                        qualityLevel = 0.3,
                        minDistance = 7,
-                       blockSize = 7,
-                       gradientSize = 3)
+                       blockSize = 7)
     
     #use the ground_function to get the ground mask
     ground_mask = f_ground(img).astype(np.uint8)
@@ -78,31 +78,16 @@ def G_cutoff(img: np.array) -> np.array:
 def recenter(coord):
     """relocate the origin of the pixel system to the center of the image plane
     the original pixel system takes the top-left corner as (0, 0)"""
+    new_coord = coord.copy()
     W = 640
     H = 480
-    coord[:, 0] = H * 0.5 - coord[:, 0]
-    coord[:, 1] = coord[:, 1] - W * 0.5
+    new_coord[:, 0] = np.abs(H * 0.5 - new_coord[:, 0])
+    new_coord[:, 1] = np.abs(new_coord[:, 1] - W * 0.5)
 
-    return coord
+    return new_coord
 
-
-# f_op: the optical flow function to be used
-# deltaT: the time constant between two consecutive frames
-def avg_Vego(f_op, preImg, nextImg, deltaT, h, f):
-    """recover the egomotion from the image velocity
-    Use the simplified version of plane-motion-filed equation (emega is ignored): 
-    Vx = (v * x * y) / (h * f)
-    Vy = (v * y ^ 2) / (h * f)
-    
-    find the egomotion velocity by averaging the calculated velocities of all the output flow points given by the f_op function"""
-    good_old, good_new, flow = f_op(preImg, nextImg, deltaT)
-    good_old, good_new = recenter(good_old), recenter(good_new)
-
-    Vx, Vy, x, y = flow[:, 0], flow[:, 1], good_old[:, 0], good_old[:, 1]
-    v1 = (Vx * h * f) / (x * y)
-    v2 = (Vy * h * f) / (y * y)
-    V = abs((np.average(v1) + np.average(v2)) / 2)
-
+def f_str(V):
+    """saturation function that prevents the speed estimation from overshooting"""
     #check if the observed velocity is abnormal, if the velocity measured is abnormal, set it to 1
     abnormal_threshold = 10
     default_V = 1
@@ -111,18 +96,120 @@ def avg_Vego(f_op, preImg, nextImg, deltaT, h, f):
     
     return V
 
+# f_op: the optical flow function to be used
+# deltaT: the time constant between two consecutive frames
+# This method has poor performance for speed estimation
+def avg_Vego(good_old, flow, h, f):
+    """recover the egomotion from the image velocity
+    Use the simplified version of plane-motion-filed equation (emega is ignored): 
+    Vx = (v * x * y) / (h * f)
+    Vy = (v * y ^ 2) / (h * f)
+    
+    find the egomotion velocity by averaging the calculated velocities of all the output flow points given by the f_op function"""
+    good_old = recenter(good_old)
+    Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
+    v1 = np.abs((Vx * h * f) / (x * y))
+    v2 = np.abs((Vy * h * f) / (y * y))
+    V = abs((np.average(v1) + np.average(v2)) / 2)
+
+    return V
+
+def preFilter(good_old, flow, h, f, preV):
+    """recover the egomotion from the image velocity
+    Use the simplified version of plane-motion-filed equation (omega is ignored): 
+    Vx = (v * x * y) / (h * f)
+    Vy = (v * y ^ 2) / (h * f)
+    
+    among all the speed estimated, drop the pixels that provide estimation significant different from preV"""
+    good_old = recenter(good_old)
+    Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
+    v1 = np.abs((Vx * h * f) / (x * y))
+    v2 = np.abs((Vy * h * f) / (y * y))
+
+    # discarding operation
+    Vs = np.concatenate((v1, v2))
+    discard_threshold = 20 # discard speed V if V > preV + discard_t or V < preV - discard_t
+    high, low = preV + discard_threshold, preV - discard_threshold
+    keep_mask = np.logical_and(Vs < high, Vs > low)
+    Vs = Vs[keep_mask]
+    print(Dpre(Vs, preV))
+    print(Vs)
+    return np.average(Vs)
+
+def Dpre(Vs, Vpre):
+    """evaluate the Dpre factor which determines how close the speed estimations are to the previous speed
+    the closer the better"""
+    D_weight = 1 # the full credit a point can receive
+    thetas = (Vs - Vpre) / Vpre # the distance as a fraction of Vpre
+    minD = 0.2 # if theta is smaller than or equal to 0.2 it will receive a full credit for Dpre
+
+    for i, theta in enumerate(thetas):
+        thetas[i] = max(minD, theta)
+
+    def make_D_f():
+        point1, credit1 = 0.8, 0.3
+        point2, credit2 = 1.0, 0.1
+        A = np.asarray([[minD**2, minD, 1], 
+                        [point1 ** 2, point1, 1],
+                        [point2 ** 2, point2, 1]])
+        b = np.asarray([[D_weight], [credit1], [credit2]])
+        parameters = np.matmul(np.linalg.inv(A), b)
+        return parameters[:, 0]
+    
+    [par1, par2, par3] = make_D_f()
+    credits = par1 * thetas ** 2 + par2 * thetas + par3
+    credits = np.clip(credits, 0, 1)
+    return credits
+
 def V_test():
-    images, real_V, f, h = du.parse_barc_data()
-    deltaT = 0.1
+    images, real_V, f, h, deltaT = du.parse_barc_data()
     op_V = []
     sample_size = 100
 
     for i in range(0, sample_size):
         pre_img, next_img = images[i], images[i + 1]
-        V = avg_Vego(cv_featureLK, pre_img, next_img, deltaT, h, f)
+        good_old, good_new, flow = cv_featureLK(pre_img, next_img, deltaT)
+        V = avg_Vego(good_old, flow, h, f)
+        V = f_str(V)
         op_V.append(V)
     real_V = real_V[: sample_size]
     plt.plot(real_V, label = "real_V")
+    plt.plot(op_V, label = "op_V")
+    plt.legend()
+    plt.show()
+
+def abnormal_test():
+    images, real_V, f, h, deltaT = du.parse_barc_data()
+    op_V = []
+    start_frame = 0
+    sample_size = 200
+
+    for i in range(start_frame, start_frame + sample_size):
+        pre_img, next_img = images[i], images[i + 1]
+        good_old, good_new, flow = cv_featureLK(pre_img, next_img, deltaT)
+        V = avg_Vego(good_old, flow, h, f)
+        V = f_str(V)
+        print(f"the estimated speed at frame {i} is {V}, the real speed is {real_V[i]}")
+        print(pre_img.shape)
+        vu.drawFlow(pre_img, good_old, good_new)
+
+def selectedTest():
+    images, real_V, f, h, deltaT = du.parse_barc_data()
+    op_V = []
+    start_frame = 50
+    sample_size = 150
+    preV = real_V[start_frame]
+    for i in range(start_frame, start_frame + sample_size):
+        pre_img, next_img = images[i], images[i + 1]
+        good_old, good_new, flow = cv_featureLK(pre_img, next_img, deltaT)
+        V = preFilter(good_old, flow, h, f, preV)
+        V = f_str(V)
+        op_V.append(V)
+        preV = V
+        print(f"the estimated speed at frame {i} is {V}, the real speed is {real_V[i]}")
+        vu.drawFlow(pre_img, good_old, good_new)
+    
+    plt.plot(real_V[start_frame:start_frame + sample_size], label = "real_V")
     plt.plot(op_V, label = "op_V")
     plt.legend()
     plt.show()
@@ -131,12 +218,12 @@ def V_test():
 # draw_arrow == True when want to test it by drawing flows
 # draw_arrow == False when want to test it by blacking out the ground area
 def test_ground_mask(draw_arrow = True):
-    images, real_V, f, h = du.parse_barc_data()
+    images, real_V, f, h, deltaT = du.parse_barc_data()
     index = np.random.randint(low = 0, high = images.shape[0])
     preImg, nextImg = images[index], images[index + 1]
     if draw_arrow:
-        deltaT = 0.1
         good_old, good_new, flow = cv_featureLK(preImg, nextImg, deltaT)
+        V = avg_Vego(good_old, flow, h, f)
         vu.drawFlow(preImg, good_old, good_new)
     else:
         preImg = preImg.copy()
@@ -149,7 +236,8 @@ def test_ground_mask(draw_arrow = True):
 def __main__():
     # cv2.imwrite("result1.jpg", image)
     # test_ground_mask(False)
-    V_test()
+    # V_test()
+    selectedTest()
     # test_ground_mask(draw_arrow = True)
 
 if __name__ == "__main__":

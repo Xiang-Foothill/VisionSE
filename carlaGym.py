@@ -30,10 +30,11 @@ def spawn_vehicle(world):
 
     IM_W = 640
     IM_H = 480
-    
+    T = 0.05
+
     cam.set_attribute("image_size_x", f"{IM_W}")
     cam.set_attribute("image_size_y", f"{IM_H}")
-    cam.set_attribute('sensor_tick', '0.1')
+    cam.set_attribute('sensor_tick', f"{T}")
     sensor_height = 1.2
     cam_2_v = carla.Transform(carla.Location(x = 2.9, z = sensor_height))
     sensor = world.spawn_actor(cam, cam_2_v, attach_to = ego)
@@ -43,6 +44,7 @@ def spawn_vehicle(world):
 
     world.data["F"] = findFocal(cam)
     world.data["sensor_height"] = sensor_height
+    world.data["T"] = T
     f_recall = make_recall(world)
     sensor.listen(f_recall)
 
@@ -93,7 +95,7 @@ def clear_world(world):
     world.data["images"] = np.asarray(world.data["images"])
 
 def judge_end(world):
-    upper_ticks = 200 # maximum number of ticks allowed for this experiment
+    upper_ticks = 300 # maximum number of ticks allowed for this experiment
     states = world.data["states"]
     return len(states) > upper_ticks
 
