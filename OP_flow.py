@@ -132,9 +132,25 @@ def preFilter(good_old, flow, h, f, preV):
     high, low = preV + discard_threshold, preV - discard_threshold
     keep_mask = np.logical_and(Vs < high, Vs > low)
     Vs = Vs[keep_mask]
-    print(Dpre(Vs, preV))
-    print(Vs)
+
+    #apply the simple Kalman filter
     return np.average(Vs)
+
+def V_kalman(good_old, flow, h, f, preV, preE):
+    good_old = recenter(good_old)
+    Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
+    v1 = np.abs((Vx * h * f) / (x * y))
+    v2 = np.abs((Vy * h * f) / (y * y))
+
+    # discarding operation
+    Vs = np.concatenate((v1, v2))
+    discard_threshold = 20 # discard speed V if V > preV + discard_t or V < preV - discard_t
+    high, low = preV + discard_threshold, preV - discard_threshold
+    keep_mask = np.logical_and(Vs < high, Vs > low)
+    Vs = Vs[keep_mask]
+
+    V, newE = simpleKalman(Vs, preV, preE)
+    return V, newE
 
 def Dpre(Vs, Vpre):
     """evaluate the Dpre factor which determines how close the speed estimations are to the previous speed
@@ -160,6 +176,28 @@ def Dpre(Vs, Vpre):
     credits = par1 * thetas ** 2 + par2 * thetas + par3
     credits = np.clip(credits, 0, 1)
     return credits
+
+# Vs: the new estimations of velocities given by the optical flow of pixels
+# preV: the velocity at t - 1 step
+# preE: the error of estimation of the previous step
+def simpleKalman(Vs, preV, preE):
+    """implement the simple one-variable version of kalman filter
+    1. regard all the pixels as one single sensor
+    2. the error provided by the measurement of this single sensor is equal to the standard deviation of Vs
+    3. kalman_gain = Eest / (Eest + Emea)"""
+
+    #note that the velocity is always changing, which means that using preV as an estimation for the current velocity will always bring in some noise
+    V_noise = 0.2
+    preE += V_noise
+
+    # find the measurement value and the error in the measurement
+    V_mea, E_mea = np.average(Vs), np.std(Vs)
+    
+    Kalman_gain = preE / (preE + E_mea)
+    V = preV + Kalman_gain * (V_mea - preV)
+    newE = (1 - Kalman_gain) * preE
+
+    return V, newE
 
 def V_test():
     images, real_V, f, h, deltaT = du.parse_barc_data()
@@ -197,12 +235,14 @@ def selectedTest():
     images, real_V, f, h, deltaT = du.parse_barc_data()
     op_V = []
     start_frame = 50
-    sample_size = 150
+    sample_size = 100
     preV = real_V[start_frame]
+    preE = 0.2
     for i in range(start_frame, start_frame + sample_size):
         pre_img, next_img = images[i], images[i + 1]
         good_old, good_new, flow = cv_featureLK(pre_img, next_img, deltaT)
-        V = preFilter(good_old, flow, h, f, preV)
+        # V = preFilter(good_old, flow, h, f, preV)
+        V, preE = V_kalman(good_old, flow, h, f, preV, preE)
         V = f_str(V)
         op_V.append(V)
         preV = V
