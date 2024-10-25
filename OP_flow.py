@@ -187,12 +187,13 @@ def simpleKalman(Vs, preV, preE):
     3. kalman_gain = Eest / (Eest + Emea)"""
 
     #note that the velocity is always changing, which means that using preV as an estimation for the current velocity will always bring in some noise
-    V_noise = 0.2
+    V_noise = 0.5
     preE += V_noise
 
     # find the measurement value and the error in the measurement
     V_mea, E_mea = np.average(Vs), np.std(Vs)
-    
+    # E_mea = E_mea / V_mea
+
     Kalman_gain = preE / (preE + E_mea)
     V = preV + Kalman_gain * (V_mea - preV)
     newE = (1 - Kalman_gain) * preE
@@ -231,13 +232,13 @@ def abnormal_test():
         print(pre_img.shape)
         vu.drawFlow(pre_img, good_old, good_new)
 
-def selectedTest():
+def selectedTest(show_img):
     images, real_V, f, h, deltaT = du.parse_barc_data()
     op_V = []
-    start_frame = 50
-    sample_size = 100
+    start_frame = 40
+    sample_size = 220
     preV = real_V[start_frame]
-    preE = 0.2
+    preE = 0.0
     for i in range(start_frame, start_frame + sample_size):
         pre_img, next_img = images[i], images[i + 1]
         good_old, good_new, flow = cv_featureLK(pre_img, next_img, deltaT)
@@ -247,7 +248,8 @@ def selectedTest():
         op_V.append(V)
         preV = V
         print(f"the estimated speed at frame {i} is {V}, the real speed is {real_V[i]}")
-        vu.drawFlow(pre_img, good_old, good_new)
+        if show_img:
+            vu.drawFlow(pre_img, good_old, good_new)
     
     plt.plot(real_V[start_frame:start_frame + sample_size], label = "real_V")
     plt.plot(op_V, label = "op_V")
@@ -277,7 +279,7 @@ def __main__():
     # cv2.imwrite("result1.jpg", image)
     # test_ground_mask(False)
     # V_test()
-    selectedTest()
+    selectedTest(True)
     # test_ground_mask(draw_arrow = True)
 
 if __name__ == "__main__":
