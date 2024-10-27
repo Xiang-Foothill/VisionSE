@@ -99,7 +99,7 @@ def f_str(V):
 # f_op: the optical flow function to be used
 # deltaT: the time constant between two consecutive frames
 # This method has poor performance for speed estimation
-def avg_Vego(good_old, flow, h, f):
+def simpleVego(good_old, flow, h, f):
     """recover the egomotion from the image velocity
     Use the simplified version of plane-motion-filed equation (emega is ignored): 
     Vx = (v * x * y) / (h * f)
@@ -110,47 +110,47 @@ def avg_Vego(good_old, flow, h, f):
     Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
     v1 = np.abs((Vx * h * f) / (x * y))
     v2 = np.abs((Vy * h * f) / (y * y))
-    V = abs((np.average(v1) + np.average(v2)) / 2)
+    return np.concatenate((v1, v2))
 
-    return V
+def preFilter(Xs, preX):
+    """discard the abnormal outliers from Vs"""
 
-def preFilter(good_old, flow, h, f, preV):
-    """recover the egomotion from the image velocity
-    Use the simplified version of plane-motion-filed equation (omega is ignored): 
-    Vx = (v * x * y) / (h * f)
-    Vy = (v * y ^ 2) / (h * f)
+    discard_threshold = 20 # discard speed V if V > preV + discard_t or V < preV - discard_t
+    high, low = preX + discard_threshold, preX - discard_threshold
+    keep_mask = np.logical_and(Xs < high, Xs > low)
+    Xs = Xs[keep_mask]
+
+    return Xs
+
+def fullEq(good_old, flow, h, f):
+    """apply the full version of the egomotion equation including angular velocity
+    Vx = (x^2 + f^2 ) * a + xyb
+    Vy = xya + y^ 2 * b
+    where a = omega / f
+    b = v / hf"""
+    good_old = recenter(good_old)
+    Vxs, Vys, xs, ys = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
+
+    #TO DO: replace the following codes with numy broadcasting operations to make it faster
+    N = len(Vxs)
+    omegas = []
+    Vs = []
+
+    for point_index in range(N):
+        Vx, Vy, x, y = Vxs[0], Vys[0], xs[0], ys[0]
+        A = np.asarray([[x ** 2 + f ** 2, x * y], [x * y, y ** 2]])
+        goals = [[Vx], [Vy]]
+        try:
+            A_inverse = np.linalg.inv(A)
+        except np.linalg.LinAlgError as err:
+            continue
+        res = np.matmul(A_inverse, goals)
+        a, b = res[0, 0], res[1, 0]
+        omegas.append(a * f), Vs.append(b * h * f)
     
-    among all the speed estimated, drop the pixels that provide estimation significant different from preV"""
-    good_old = recenter(good_old)
-    Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
-    v1 = np.abs((Vx * h * f) / (x * y))
-    v2 = np.abs((Vy * h * f) / (y * y))
-
-    # discarding operation
-    Vs = np.concatenate((v1, v2))
-    discard_threshold = 20 # discard speed V if V > preV + discard_t or V < preV - discard_t
-    high, low = preV + discard_threshold, preV - discard_threshold
-    keep_mask = np.logical_and(Vs < high, Vs > low)
-    Vs = Vs[keep_mask]
-
-    #apply the simple Kalman filter
-    return np.average(Vs)
-
-def V_kalman(good_old, flow, h, f, preV, preE):
-    good_old = recenter(good_old)
-    Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
-    v1 = np.abs((Vx * h * f) / (x * y))
-    v2 = np.abs((Vy * h * f) / (y * y))
-
-    # discarding operation
-    Vs = np.concatenate((v1, v2))
-    discard_threshold = 20 # discard speed V if V > preV + discard_t or V < preV - discard_t
-    high, low = preV + discard_threshold, preV - discard_threshold
-    keep_mask = np.logical_and(Vs < high, Vs > low)
-    Vs = Vs[keep_mask]
-
-    V, newE = simpleKalman(Vs, preV, preE)
-    return V, newE
+    omegas = np.asarray(omegas)
+    Vs = np.asarray(Vs)
+    return Vs, omegas
 
 def Dpre(Vs, Vpre):
     """evaluate the Dpre factor which determines how close the speed estimations are to the previous speed
@@ -180,25 +180,28 @@ def Dpre(Vs, Vpre):
 # Vs: the new estimations of velocities given by the optical flow of pixels
 # preV: the velocity at t - 1 step
 # preE: the error of estimation of the previous step
-def simpleKalman(Vs, preV, preE):
+def simpleKalman(Xs, preX, preE):
     """implement the simple one-variable version of kalman filter
     1. regard all the pixels as one single sensor
     2. the error provided by the measurement of this single sensor is equal to the standard deviation of Vs
     3. kalman_gain = Eest / (Eest + Emea)"""
 
     #note that the velocity is always changing, which means that using preV as an estimation for the current velocity will always bring in some noise
-    V_noise = 0.5
-    preE += V_noise
+    X_noise = 0.5
+    preE += X_noise
 
     # find the measurement value and the error in the measurement
-    V_mea, E_mea = np.median(Vs), np.std(Vs)
+    X_mea, E_mea = np.median(Xs), np.std(Xs)
+    print(f"the speed estimated by pure optical flow is {X_mea}")
     # E_mea = E_mea / V_mea
 
     Kalman_gain = preE / (preE + E_mea)
-    V = preV + Kalman_gain * (V_mea - preV)
+    X = preX + Kalman_gain * (X_mea - preX)
     newE = (1 - Kalman_gain) * preE
 
-    return V, newE
+    return X, newE
+
+"""####################### TEST FUNCTIONS BELOW ###########################"""
 
 def V_test():
     images, real_V, f, h, deltaT = du.parse_barc_data()
@@ -208,7 +211,7 @@ def V_test():
     for i in range(0, sample_size):
         pre_img, next_img = images[i], images[i + 1]
         good_old, good_new, flow = cv_featureLK(pre_img, next_img, deltaT)
-        V = avg_Vego(good_old, flow, h, f)
+        V = simpleVego(good_old, flow, h, f)
         V = f_str(V)
         op_V.append(V)
     real_V = real_V[: sample_size]
@@ -226,7 +229,7 @@ def abnormal_test():
     for i in range(start_frame, start_frame + sample_size):
         pre_img, next_img = images[i], images[i + 1]
         good_old, good_new, flow = cv_featureLK(pre_img, next_img, deltaT)
-        V = avg_Vego(good_old, flow, h, f)
+        V = simpleVego(good_old, flow, h, f)
         V = f_str(V)
         print(f"the estimated speed at frame {i} is {V}, the real speed is {real_V[i]}")
         print(pre_img.shape)
@@ -235,16 +238,22 @@ def abnormal_test():
 def selectedTest(show_img):
     images, real_V, f, h, deltaT = du.parse_barc_data()
     op_V = []
-    start_frame = 40
-    sample_size = 220
+    start_frame = 20
+    sample_size = 200
     preV = real_V[start_frame]
     preE = 0.0
+
     for i in range(start_frame, start_frame + sample_size):
         pre_img, next_img = images[i], images[i + 1]
         good_old, good_new, flow = cv_featureLK(pre_img, next_img, deltaT)
-        # V = preFilter(good_old, flow, h, f, preV)
-        V, preE = V_kalman(good_old, flow, h, f, preV, preE)
-        V = f_str(V)
+
+        # Vs = simpleVego(good_old, flow, h, f)
+        # Vs = preFilter(Vs, preV)
+        # V, preE = simpleKalman(Vs, preV, preE)
+        # V = f_str(V)
+        Vs, Omegas = fullEq(good_old, flow, h, f)
+        V, omega = np.average(Vs), np.average(Omegas)
+
         op_V.append(V)
         preV = V
         print(f"the estimated speed at frame {i} is {V}, the real speed is {real_V[i]}")
@@ -265,7 +274,7 @@ def test_ground_mask(draw_arrow = True):
     preImg, nextImg = images[index], images[index + 1]
     if draw_arrow:
         good_old, good_new, flow = cv_featureLK(preImg, nextImg, deltaT)
-        V = avg_Vego(good_old, flow, h, f)
+        V = simpleVego(good_old, flow, h, f)
         vu.drawFlow(preImg, good_old, good_new)
     else:
         preImg = preImg.copy()
@@ -279,7 +288,7 @@ def main():
     # cv2.imwrite("result1.jpg", image)
     # test_ground_mask(False)
     # V_test()
-    selectedTest(True)
+    selectedTest(False)
     # test_ground_mask(draw_arrow = True)
 
 if __name__ == "__main__":

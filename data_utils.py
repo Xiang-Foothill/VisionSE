@@ -5,12 +5,14 @@ import cv2
 from matplotlib import pyplot as plt
 import os
 BARC_PATH = "ParaDriveLocalComparison_Oct1_enc_0.npz"
-CARLA_PATH = "carlaData1.pkl"
+CARLA_PATH1 = "carlaData1.pkl"
+CARLA_PATH2 = "carlaData2.pkl"
+CARLA_PATH3 = "carlaData3.pkl"
 BARC_H = 0.123 # the height of the camera from the horizontal graound 
 BARC_F = 605.5 # focal length in terms of pixels - [pixels]
 BARC_T = 0.1
 
-def parse_barc_data(dataset_path = CARLA_PATH) -> Tuple[np.ndarray, np.ndarray]:
+def parse_barc_data(dataset_path = CARLA_PATH2) -> Tuple[np.ndarray, np.ndarray]:
     """
     
     @param dataset_path: Path to the dataset npz file. 

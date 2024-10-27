@@ -23,6 +23,7 @@ def spawn_vehicle(world):
     blueprint = blueprint_library.find("vehicle.audi.a2")
     world_map = world.get_map()
     spawn_points = world_map.generate_waypoints(distance = 0.5)
+    point_index = np.random.randint(low = 0, high = len(spawn_points))
     ego = world.spawn_actor(blueprint, spawn_points[0].transform)
 
     # attach a rgb camera to the vehicle
@@ -122,7 +123,7 @@ def play_game():
     clear_world(world)
     cur_path = os.getcwd()
     SE_root = os.path.dirname(cur_path)
-    path_to_save =  SE_root + "/VideoSet/" + "carlaData1.pkl"
+    path_to_save =  SE_root + "/VideoSet/" + "carlaData3.pkl"
     saveData(world.data, path_to_save)
     # du.random_image_test(world.data["images"])
 
