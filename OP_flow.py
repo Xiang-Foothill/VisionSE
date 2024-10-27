@@ -44,7 +44,7 @@ def get_Trackpoints(img):
     
     #use the ground_function to get the ground mask
     ground_mask = f_ground(img).astype(np.uint8)
-    ground_mask = None
+    # ground_mask = None
     p0 = cv2.goodFeaturesToTrack(img, mask = ground_mask, **feature_params)
 
     if p0 is None:
@@ -191,7 +191,7 @@ def simpleKalman(Vs, preV, preE):
     preE += V_noise
 
     # find the measurement value and the error in the measurement
-    V_mea, E_mea = np.average(Vs), np.std(Vs)
+    V_mea, E_mea = np.median(Vs), np.std(Vs)
     # E_mea = E_mea / V_mea
 
     Kalman_gain = preE / (preE + E_mea)
@@ -275,7 +275,7 @@ def test_ground_mask(draw_arrow = True):
         cv2.imshow("image with the ground labeled", img)
         cv2.waitKey(0)
 
-def __main__():
+def main():
     # cv2.imwrite("result1.jpg", image)
     # test_ground_mask(False)
     # V_test()
@@ -283,4 +283,4 @@ def __main__():
     # test_ground_mask(draw_arrow = True)
 
 if __name__ == "__main__":
-    __main__()
+    main()
