@@ -123,7 +123,7 @@ def play_game():
     clear_world(world)
     cur_path = os.getcwd()
     SE_root = os.path.dirname(cur_path)
-    path_to_save =  SE_root + "/VideoSet/" + "carlaData3.pkl"
+    path_to_save =  SE_root + "/VideoSet/" + "chessCircle.pkl"
     saveData(world.data, path_to_save)
     # du.random_image_test(world.data["images"])
 

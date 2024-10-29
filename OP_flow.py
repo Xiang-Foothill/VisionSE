@@ -44,7 +44,7 @@ def get_Trackpoints(img):
     
     #use the ground_function to get the ground mask
     ground_mask = f_ground(img).astype(np.uint8)
-    # ground_mask = None
+    ground_mask = None
     p0 = cv2.goodFeaturesToTrack(img, mask = ground_mask, **feature_params)
 
     if p0 is None:
@@ -112,10 +112,10 @@ def simpleVego(good_old, flow, h, f):
     v2 = np.abs((Vy * h * f) / (y * y))
     return np.concatenate((v1, v2))
 
-def preFilter(Xs, preX):
+def preFilter(Xs, preX, discard_threshold):
     """discard the abnormal outliers from Vs"""
 
-    discard_threshold = 20 # discard speed V if V > preV + discard_t or V < preV - discard_t
+   # discard speed V if V > preV + discard_t or V < preV - discard_t
     high, low = preX + discard_threshold, preX - discard_threshold
     keep_mask = np.logical_and(Xs < high, Xs > low)
     Xs = Xs[keep_mask]
@@ -137,7 +137,7 @@ def fullEq(good_old, flow, h, f):
     Vs = []
 
     for point_index in range(N):
-        Vx, Vy, x, y = Vxs[0], Vys[0], xs[0], ys[0]
+        Vx, Vy, x, y = Vxs[point_index], Vys[point_index], xs[point_index], ys[point_index]
         A = np.asarray([[x ** 2 + f ** 2, x * y], [x * y, y ** 2]])
         goals = [[Vx], [Vy]]
         try:
@@ -150,7 +150,7 @@ def fullEq(good_old, flow, h, f):
     
     omegas = np.asarray(omegas)
     Vs = np.asarray(Vs)
-    return Vs, omegas
+    return np.abs(Vs), np.abs(omegas)
 
 def Dpre(Vs, Vpre):
     """evaluate the Dpre factor which determines how close the speed estimations are to the previous speed
@@ -180,19 +180,18 @@ def Dpre(Vs, Vpre):
 # Vs: the new estimations of velocities given by the optical flow of pixels
 # preV: the velocity at t - 1 step
 # preE: the error of estimation of the previous step
-def simpleKalman(Xs, preX, preE):
+def simpleKalman(Xs, preX, preE, X_noise):
     """implement the simple one-variable version of kalman filter
     1. regard all the pixels as one single sensor
     2. the error provided by the measurement of this single sensor is equal to the standard deviation of Vs
     3. kalman_gain = Eest / (Eest + Emea)"""
 
     #note that the velocity is always changing, which means that using preV as an estimation for the current velocity will always bring in some noise
-    X_noise = 0.5
     preE += X_noise
 
     # find the measurement value and the error in the measurement
     X_mea, E_mea = np.median(Xs), np.std(Xs)
-    print(f"the speed estimated by pure optical flow is {X_mea}")
+    # print(f"the speed estimated by pure optical flow is {X_mea}")
     # E_mea = E_mea / V_mea
 
     Kalman_gain = preE / (preE + E_mea)
@@ -236,34 +235,60 @@ def abnormal_test():
         vu.drawFlow(pre_img, good_old, good_new)
 
 def selectedTest(show_img):
-    images, real_V, f, h, deltaT = du.parse_barc_data()
+    images, real_V, real_Omega, f, h, deltaT = du.parse_barc_data(Omega_exist=True)
     op_V = []
-    start_frame = 20
-    sample_size = 200
+    OP_Omega = []
+
+    start_frame = 50
+    sample_size = 100
     preV = real_V[start_frame]
-    preE = 0.0
+    preW = abs(real_Omega[start_frame])
+    V_discard = 20
+    W_discard = 5.0
+    V_noise = 0.05
+    W_noise = 0.5
+    preVE = 0.0
+    preWE = 0.0
 
     for i in range(start_frame, start_frame + sample_size):
         pre_img, next_img = images[i], images[i + 1]
         good_old, good_new, flow = cv_featureLK(pre_img, next_img, deltaT)
-
-        # Vs = simpleVego(good_old, flow, h, f)
-        # Vs = preFilter(Vs, preV)
-        # V, preE = simpleKalman(Vs, preV, preE)
-        # V = f_str(V)
-        Vs, Omegas = fullEq(good_old, flow, h, f)
-        V, omega = np.average(Vs), np.average(Omegas)
-
-        op_V.append(V)
-        preV = V
-        print(f"the estimated speed at frame {i} is {V}, the real speed is {real_V[i]}")
+        
+        V, W, preV, preW, preVE, preWE = full_estimator(good_old, flow, h, f, preV, V_discard, preW, W_discard, preVE, preWE, V_noise, W_noise, onlyV = False)
+        op_V.append(V), OP_Omega.append(W)
+        print(f"At the frame {i}: V_estimated = {V} real_V = {real_V[i]}; W_estimated = {W}, real_W = {real_Omega[i]}")
         if show_img:
             vu.drawFlow(pre_img, good_old, good_new)
     
-    plt.plot(real_V[start_frame:start_frame + sample_size], label = "real_V")
-    plt.plot(op_V, label = "op_V")
-    plt.legend()
+    # plt.plot(real_V[start_frame:start_frame + sample_size], label = "real_V")
+    # plt.plot(op_V, label = "op_V")
+    # plt.legend()
+    # plt.show()
+
+    f, (ax1, ax2) = plt.subplots(1, 2)
+    ax1.plot(real_V[start_frame : start_frame + sample_size], label = "real_V")
+    ax1.plot(op_V, label = "op_V")
+    ax2.plot(np.abs(real_Omega[start_frame : start_frame + sample_size]), label = "real_Omega")
+    ax2.plot(OP_Omega, label = "op_Omega")
+    ax1.legend()
+    ax2.legend()
     plt.show()
+
+def full_estimator(good_old, flow, h, f, preV, V_discard, preW, W_discard, preVE, preWE, V_noise, W_noise, onlyV = False):
+    if onlyV:
+        Vs = simpleVego(good_old, flow, h, f)
+        Vs = preFilter(Vs, preV, V_discard)
+        V, preVE = simpleKalman(Vs, preV, preVE, V_noise)
+        preV = V
+        W, preW = 0.0, 0.0
+    else:
+        Vs, Omegas = fullEq(good_old, flow, h, f)
+        Vs, Omegas = preFilter(Vs, preV, V_discard), preFilter(Omegas, preW, W_discard)
+        V, preVE = simpleKalman(Vs, preV, preVE, V_noise)
+        W, preWE = simpleKalman(Omegas, preW, preWE, W_noise)
+        preV, preW = V, W
+
+    return V, W, preV, preW, preVE, preWE
 
 # test the ground detection function
 # draw_arrow == True when want to test it by drawing flows
