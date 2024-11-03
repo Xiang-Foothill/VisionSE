@@ -254,7 +254,7 @@ def selectedTest(show_img):
         pre_img, next_img = images[i], images[i + 1]
         good_old, good_new, flow = cv_featureLK(pre_img, next_img, deltaT)
         
-        V, W, preV, preW, preVE, preWE = full_estimator(good_old, flow, h, f, preV, V_discard, preW, W_discard, preVE, preWE, V_noise, W_noise, onlyV = False)
+        V, W, preV, preW, preVE, preWE = full_estimator(good_old, flow, h, f, preV, V_discard, preW, W_discard, preVE, preWE, V_noise, W_noise, onlyV =False)
         op_V.append(V), OP_Omega.append(W)
         print(f"At the frame {i}: V_estimated = {V} real_V = {real_V[i]}; W_estimated = {W}, real_W = {real_Omega[i]}")
         if show_img:
