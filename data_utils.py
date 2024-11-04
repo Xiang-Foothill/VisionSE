@@ -13,7 +13,7 @@ BARC_H = 0.123 # the height of the camera from the horizontal graound
 BARC_F = 605.5 # focal length in terms of pixels - [pixels]
 BARC_T = 0.1
 
-def parse_barc_data(dataset_path = CHESS_CIRCLE, Omega_exist = False) -> Tuple[np.ndarray, np.ndarray]:
+def parse_barc_data(dataset_path = CARLA_PATH2, Omega_exist = False) -> Tuple[np.ndarray, np.ndarray]:
     """
     @param dataset_path: Path to the dataset npz file. 
     @param Omega_exist: if the values of angular velocities should be returned or not, if they need to be returned, return in the form: [Images, real_Vs, real_Omegas, F, h, T]

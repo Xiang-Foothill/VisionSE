@@ -5,7 +5,7 @@ import video_utils as vu
 import data_utils as du
 
 # This function calculates the optical flow of points selected by cv2.goodFeature 
-def cv_featureLK(preImg, nextImg, deltaT):
+def cv_featureLK(preImg, nextImg, deltaT, mask):
     """apply the openCV built-in function cv.calcOpticalFlowPyrLK and good to implement Lukas-Kanade 
     Method to calculate the optical-flow between two consecutive frames
     1. find all coordinates of the points with good features to be tracked
@@ -20,7 +20,7 @@ def cv_featureLK(preImg, nextImg, deltaT):
     old_gray = cv2.cvtColor(preImg, cv2.COLOR_BGR2GRAY)
     new_Gray = cv2.cvtColor(nextImg, cv2.COLOR_BGR2GRAY)
 
-    p0 = get_Trackpoints(old_gray)
+    p0 = get_Trackpoints(old_gray, mask)
 
     #Calculate the values of the optical Flow
     p1, st, err = cv2.calcOpticalFlowPyrLK(old_gray, new_Gray, p0, None,  **lk_params)
@@ -32,9 +32,9 @@ def cv_featureLK(preImg, nextImg, deltaT):
     flow = (good_new - good_old) / deltaT
     return good_old, good_new, flow
 
-def get_Trackpoints(img):
+def get_Trackpoints(img, ground_mask):
     # specify the function used to detect the ground
-    f_ground = G_cutoff
+    # f_ground = G_cutoff
 
     # find the points with good features to be tracked
     feature_params = dict( maxCorners = 100,
@@ -43,8 +43,9 @@ def get_Trackpoints(img):
                        blockSize = 7)
     
     #use the ground_function to get the ground mask
-    ground_mask = f_ground(img).astype(np.uint8)
-    ground_mask = None
+    # ground_mask = f_ground(img).astype(np.uint8)
+    ground_mask = ground_mask.astype(np.uint8)
+    # ground_mask = None
     p0 = cv2.goodFeaturesToTrack(img, mask = ground_mask, **feature_params)
 
     if p0 is None:
@@ -65,13 +66,58 @@ def G_cutoff(img: np.array) -> np.array:
     return a boolean mask array"""
     H, W = img.shape[0], img.shape[1]
     # define the height and width of the ground zone
-    ground_H = 180
-    ground_W = 500
-    bottom_center = 320
+    ground_H = 240
+    ground_W = 150
+    bottom_center = 100
+    ground_start = 0
 
     mask = np.zeros(shape = (H, W), dtype = bool)
     # mask[:200, :100] = True
-    mask[H - ground_H : H, int(bottom_center - ground_W / 2) : int(bottom_center + ground_W / 2)] = True
+    mask[H - ground_H - ground_start: H - ground_start, int(bottom_center - ground_W / 2) : int(bottom_center + ground_W / 2)] = True
+    return mask
+
+def side_ground(img: np.array) -> np.array:
+    """generate a mask in which only the left 1/3 sides and right 1/3 sides of the ground are marked as True"""
+
+    H, W = img.shape[0], img.shape[1]
+    # define the height and width of the ground zone
+    ground_H = H * 0.38
+    ground_W = W / 4
+    ground_start = 0
+    bottom_center1 = W / 6
+    bottom_center2 = W * 5 / 6
+
+    mask = np.zeros(shape = (H, W), dtype = bool)
+    mask[int(H - ground_H - ground_start): int(H - ground_start), int(bottom_center1 - ground_W / 2): int(bottom_center1 + ground_W / 2)] = True
+    mask[int(H - ground_H - ground_start): int(H - ground_start), int(bottom_center2 - ground_W / 2) : int(bottom_center2 + ground_W / 2)] = True
+    return mask
+
+def bottom_ground(img):
+    """generate a mask in which only the bottom 1/2 of the ground is marked as true"""
+
+    H, W = img.shape[0], img.shape[1]
+    # define the height and width of the ground zone
+    ground_H = H * 0.30
+    ground_W = W - 10
+    ground_start = 0
+    bottom_center = W * 0.5
+
+    mask = np.zeros(shape = (H, W), dtype = bool)
+    mask[int(H - ground_H - ground_start): int(H - ground_start), int(bottom_center - ground_W / 2): int(bottom_center + ground_W / 2)] = True
+    return mask
+
+def X0_ground(img):
+    """generate a mask in which all the points close to the vertical axis x = 0 are marked as true"""
+
+    H, W = img.shape[0], img.shape[1]
+    # define the height and width of the ground zone
+    ground_H = H * 0.25
+    ground_W = 60
+    ground_start = 0
+    bottom_center = W * 0.5
+
+    mask = np.zeros(shape = (H, W), dtype = bool)
+    mask[int(H - ground_H - ground_start): int(H - ground_start), int(bottom_center - ground_W / 2): int(bottom_center + ground_W / 2)] = True
     return mask
 
 # coord: the coordinates of the pixels to be changed
@@ -81,9 +127,11 @@ def recenter(coord):
     new_coord = coord.copy()
     W = 640
     H = 480
+    # new_coord[:, 0] = np.abs(H * 0.5 - new_coord[:, 0])
+    # new_coord[:, 1] = np.abs(new_coord[:, 1] - W * 0.5)
+
     new_coord[:, 0] = np.abs(H * 0.5 - new_coord[:, 0])
     new_coord[:, 1] = np.abs(new_coord[:, 1] - W * 0.5)
-
     return new_coord
 
 def f_str(V):
@@ -111,6 +159,33 @@ def simpleVego(good_old, flow, h, f):
     v1 = np.abs((Vx * h * f) / (x * y))
     v2 = np.abs((Vy * h * f) / (y * y))
     return np.concatenate((v1, v2))
+
+def Vx2V(good_old, flow, h, f):
+    """this function is the same as simpleVego
+    However, it only applies the value of Vx to evaluate the speed of the ego vehicle"""
+
+    good_old = recenter(good_old)
+    Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
+    v1 = np.abs((Vx * h * f) / (x * y))
+
+    return v1
+
+def Vy2V(good_old, flow, h, f):
+    """this function is the same as simpleVego
+    However, it only applies the value of Vy to evaluate the speed of the ego vehicle"""
+
+    good_old = recenter(good_old)
+    Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
+    v2 = np.abs((Vy * h * f) / (y * y))
+    return v2
+
+def Vx2W(good_old, flow, h, f):
+    """find the value of angular velocities based on purely Vx
+    all the points in good_old are assumed to have x_coordinates with very small values"""
+    good_old = recenter(good_old)
+    Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
+    Ws = Vx / f
+    return - Ws
 
 def preFilter(Xs, preX, discard_threshold):
     """discard the abnormal outliers from Vs"""
@@ -190,8 +265,8 @@ def simpleKalman(Xs, preX, preE, X_noise):
     preE += X_noise
 
     # find the measurement value and the error in the measurement
-    X_mea, E_mea = np.median(Xs), np.std(Xs)
-    # print(f"the speed estimated by pure optical flow is {X_mea}")
+    X_mea, E_mea = np.average(Xs), np.std(Xs)
+    print(f"the speed estimated by pure optical flow is {X_mea}")
     # E_mea = E_mea / V_mea
 
     Kalman_gain = preE / (preE + E_mea)
@@ -234,7 +309,7 @@ def abnormal_test():
         print(pre_img.shape)
         vu.drawFlow(pre_img, good_old, good_new)
 
-def selectedTest(show_img):
+def selectedTest(show_img, mode):
     images, real_V, real_Omega, f, h, deltaT = du.parse_barc_data(Omega_exist=True)
     op_V = []
     OP_Omega = []
@@ -242,19 +317,48 @@ def selectedTest(show_img):
     start_frame = 50
     sample_size = 100
     preV = real_V[start_frame]
-    preW = abs(real_Omega[start_frame])
+    preW = real_Omega[start_frame]
     V_discard = 20
     W_discard = 5.0
     V_noise = 0.05
-    W_noise = 0.5
+    W_noise = 0.01
     preVE = 0.0
     preWE = 0.0
 
     for i in range(start_frame, start_frame + sample_size):
         pre_img, next_img = images[i], images[i + 1]
-        good_old, good_new, flow = cv_featureLK(pre_img, next_img, deltaT)
+
+        if mode == "onlyV":
+            mask1, mask2 = side_ground(pre_img), bottom_ground(pre_img)
+            good_old1, good_new1, flow1 = cv_featureLK(pre_img, next_img, deltaT, mask1)
+            good_old2, good_new2, flow2 = cv_featureLK(pre_img, next_img, deltaT, mask2)
+            good_old = np.concatenate((good_old1, good_old2))
+            good_new = np.concatenate((good_new1, good_new2))
+            Vs1, Vs2 = Vx2V(good_old1, flow1, h, f), Vy2V(good_old2, flow2, h, f)
+            Vs = np.concatenate((Vs1, ))
+            Vs = preFilter(Vs, preV, V_discard)
+            V, preVE = simpleKalman(Vs, preV, preVE, V_noise)
+            preV = V
+            W, preW = 0.0, 0.0
         
-        V, W, preV, preW, preVE, preWE = full_estimator(good_old, flow, h, f, preV, V_discard, preW, W_discard, preVE, preWE, V_noise, W_noise, onlyV = False)
+        elif mode == "fullEq":
+            mask = side_ground(pre_img)
+            good_old, good_new, flow = cv_featureLK(pre_img, next_img, deltaT, mask)
+            Vs, Omegas = fullEq(good_old, flow, h, f)
+            Vs, Omegas = preFilter(Vs, preV, V_discard), preFilter(Omegas, preW, W_discard)
+            V, preVE = simpleKalman(Vs, preV, preVE, V_noise)
+            W, preWE = simpleKalman(Omegas, preW, preWE, W_noise)
+            preV, preW = V, W
+        
+        elif mode == "onlyW":
+            mask = X0_ground(pre_img)
+            good_old, good_new, flow = cv_featureLK(pre_img, next_img, deltaT, mask)
+            Ws = Vx2W(good_old, flow, h, f)
+            Ws = preFilter(Ws, preW, W_discard)
+            W, preWE = simpleKalman(Ws, preW, preWE, W_noise)
+            preW = W
+            V, preV = 0.0 , 0.0
+
         op_V.append(V), OP_Omega.append(W)
         print(f"At the frame {i}: V_estimated = {V} real_V = {real_V[i]}; W_estimated = {W}, real_W = {real_Omega[i]}")
         if show_img:
@@ -268,20 +372,23 @@ def selectedTest(show_img):
     f, (ax1, ax2) = plt.subplots(1, 2)
     ax1.plot(real_V[start_frame : start_frame + sample_size], label = "real_V")
     ax1.plot(op_V, label = "op_V")
-    ax2.plot(np.abs(real_Omega[start_frame : start_frame + sample_size]), label = "real_Omega")
+    ax2.plot(real_Omega[start_frame : start_frame + sample_size], label = "real_Omega")
     ax2.plot(OP_Omega, label = "op_Omega")
     ax1.legend()
     ax2.legend()
     plt.show()
 
-def full_estimator(good_old, flow, h, f, preV, V_discard, preW, W_discard, preVE, preWE, V_noise, W_noise, onlyV = False):
-    if onlyV:
+# this function is not workable for the pipeline rightnow
+def full_estimator(pre_img, next_img, deltaT, h, f, preV, V_discard, preW, W_discard, preVE, preWE, V_noise, W_noise, mode):
+    if mode == "onlyV":
+        good_old, good_new, flow = cv_featureLK(pre_img, next_img, deltaT)
         Vs = simpleVego(good_old, flow, h, f)
         Vs = preFilter(Vs, preV, V_discard)
         V, preVE = simpleKalman(Vs, preV, preVE, V_noise)
         preV = V
         W, preW = 0.0, 0.0
-    else:
+    elif mode == "fullEq":
+        good_old, good_new, flow = cv_featureLK(pre_img, next_img, deltaT)
         Vs, Omegas = fullEq(good_old, flow, h, f)
         Vs, Omegas = preFilter(Vs, preV, V_discard), preFilter(Omegas, preW, W_discard)
         V, preVE = simpleKalman(Vs, preV, preVE, V_noise)
@@ -313,7 +420,7 @@ def main():
     # cv2.imwrite("result1.jpg", image)
     # test_ground_mask(False)
     # V_test()
-    selectedTest(False)
+    selectedTest(show_img = False, mode = "onlyV")
     # test_ground_mask(draw_arrow = True)
 
 if __name__ == "__main__":
