@@ -59,6 +59,8 @@ def get_Trackpoints(img, ground_mask):
     else:
         return p0
 
+"""********** MASK function below ***************"""
+
 # return: a mask array representing whether each pixel is a part of the ground or not
 def G_cutoff(img: np.array) -> np.array:
     """find which part of the img is ground (True) and which part is not (False)
@@ -66,9 +68,9 @@ def G_cutoff(img: np.array) -> np.array:
     return a boolean mask array"""
     H, W = img.shape[0], img.shape[1]
     # define the height and width of the ground zone
-    ground_H = 240
-    ground_W = 150
-    bottom_center = 100
+    ground_H = 300
+    ground_W = 600
+    bottom_center = W * 0.5
     ground_start = 0
 
     mask = np.zeros(shape = (H, W), dtype = bool)
@@ -120,6 +122,39 @@ def X0_ground(img):
     mask[int(H - ground_H - ground_start): int(H - ground_start), int(bottom_center - ground_W / 2): int(bottom_center + ground_W / 2)] = True
     return mask
 
+def regionGround(img, region_name):
+    """the region mask function in the general form
+    region_name = "topLeft" / "topMiddle" ect. 
+    based on the name of the region the correspondig region is marked as true"""
+
+    # the helper function
+    def mark_region(y_start, y_end, x_start, x_end):
+
+        H, W = img.shape[0], img.shape[1]
+        mask = np.zeros(shape = (H, W), dtype = bool)
+        mask[y_start: y_end, x_start : x_end] = True
+
+        return mask
+    
+    H, W = img.shape[0], img.shape[1]
+
+    # define the boundaries for the region
+    h0, h1, h2 = int(H * 0.5), int(H * 0.75), H
+    w0, w1, w2, w3 = 0, int(W / 3), int(W * 2 / 3), W
+
+    if region_name == "topLeft":
+        return mark_region(h0, h1, w0, w1)
+    if region_name == "topMiddle":
+        return mark_region(h0, h1, w1, w2)
+    if region_name == "topRight":
+        return mark_region(h0, h1, w2, w3)
+    if region_name == "downLeft":
+        return mark_region(h1, h2, w0, w1)
+    if region_name == "downMiddle":
+        return mark_region(h1, h2, w1, w2)
+    if region_name == "downRight":
+        return mark_region(h1, h2, w2, w3)
+    
 # coord: the coordinates of the pixels to be changed
 def recenter(coord):
     """relocate the origin of the pixel system to the center of the image plane
@@ -314,7 +349,7 @@ def selectedTest(show_img, mode):
     op_V = []
     OP_Omega = []
 
-    start_frame = 50
+    start_frame = 20
     sample_size = 100
     preV = real_V[start_frame]
     preW = real_Omega[start_frame]
@@ -342,7 +377,7 @@ def selectedTest(show_img, mode):
             W, preW = 0.0, 0.0
         
         elif mode == "fullEq":
-            mask = side_ground(pre_img)
+            mask = G_cutoff(pre_img)
             good_old, good_new, flow = cv_featureLK(pre_img, next_img, deltaT, mask)
             Vs, Omegas = fullEq(good_old, flow, h, f)
             Vs, Omegas = preFilter(Vs, preV, V_discard), preFilter(Omegas, preW, W_discard)
@@ -376,6 +411,85 @@ def selectedTest(show_img, mode):
     ax2.plot(OP_Omega, label = "op_Omega")
     ax1.legend()
     ax2.legend()
+    plt.show()
+
+
+# test the performance of each region on evaluating speed and angular speed
+def regionTest(mode, region_displayed):
+    images, real_V, real_Omega, f, h, deltaT = du.parse_barc_data(Omega_exist=True)
+    OP_Omega = []
+
+    start_frame = 20
+    sample_size = 100
+    preV = real_V[start_frame]
+    preW = real_Omega[start_frame]
+    V_discard = 20
+    W_discard = 5.0
+    V_noise = 0.05
+    W_noise = 0.01
+    preVE = 0.0
+    preWE = 0.0
+    regions = np.asarray([["topLeft", "topMiddle", "topRight"], ["downLeft", "downMiddle", "downRight"]])
+
+    def Vx_iter(mask):
+        op_V = []
+        preV = real_V[start_frame]
+        preVE = 0.0
+        display_set = {}
+        for i in range(start_frame, start_frame + sample_size):
+            pre_img, next_img = images[i], images[i + 1]
+
+            good_old, good_new, flow = cv_featureLK(pre_img, next_img, deltaT, mask)
+            Vs = Vx2V(good_old, flow, h, f)
+            Vs = preFilter(Vs, preV, V_discard)
+            V, preVE = simpleKalman(Vs, preV, preVE, V_noise)
+            preV = V
+            op_V.append(V)
+
+            if np.random.uniform(low = 0.0, high = 1.0) > 0.95:
+                display_set[f'frame {i}'] = vu.npArrowFlow(pre_img, good_old, good_new)
+
+        return op_V, display_set
+    
+    def Vy_iter(mask):
+        op_V = []
+        preV = real_V[start_frame]
+        preVE = 0.0
+        display_set = {}
+        for i in range(start_frame, start_frame + sample_size):
+            pre_img, next_img = images[i], images[i + 1]
+
+            good_old, good_new, flow = cv_featureLK(pre_img, next_img, deltaT, mask)
+            Vs = Vy2V(good_old, flow, h, f)
+            Vs = preFilter(Vs, preV, V_discard)
+            V, preVE = simpleKalman(Vs, preV, preVE, V_noise)
+            preV = V
+            op_V.append(V)
+
+            if np.random.uniform(low = 0.0, high = 1.0) > 0.95:
+                display_set[f'frame {i}'] = vu.npArrowFlow(pre_img, good_old, good_new)
+            
+        return op_V
+    
+    fig, axs = plt.subplots(2, 3)
+
+    for index, name in np.ndenumerate(regions):
+        cur_region = name
+        mask = regionGround(images[start_frame], region_name= cur_region)
+        if mode == "Vx":
+            iter = Vx_iter
+        if mode == "Vy":
+            iter = Vy_iter
+        op_V, cur_list = iter(mask)
+        axs[index].plot(op_V, label = "op_V")
+        axs[index].plot(real_V[start_frame : start_frame + sample_size], label = "real_V")
+        axs[index].set_title(cur_region)
+        axs[index].legend()
+
+        if cur_region in region_displayed:
+            plt.figure(cur_region)
+            vu.show_IM_window(cur_list)
+
     plt.show()
 
 # this function is not workable for the pipeline rightnow
@@ -420,7 +534,8 @@ def main():
     # cv2.imwrite("result1.jpg", image)
     # test_ground_mask(False)
     # V_test()
-    selectedTest(show_img = False, mode = "onlyV")
+    # selectedTest(show_img = True, mode = "fullEq")
+    regionTest("Vx", region_displayed = ["downMiddle"])
     # test_ground_mask(draw_arrow = True)
 
 if __name__ == "__main__":

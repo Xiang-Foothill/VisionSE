@@ -70,6 +70,18 @@ def to_cvChannels(img):
     cv2_img[:, :, :, 2] = img[:, 0, :, :]
     return np.uint8(cv2_img)
 
+def to_npChannels(img):
+    """convert a RGB image from the cv2 format to the numpy format
+    cv2 format: [height, width, channels]
+    numpy format:[channels, height, wdith]"""
+    h, w = img.shape[0], img.shape[1]
+    res = np.zeros(shape = (3, h, w))
+    res[0, :, :] = img[:, :, 0]
+    res[1, :, :] = img[:, :, 1]
+    res[2, :, :] = img[:, :, 2]
+
+    return np.uint8(res)
+
 def BGRA2RGB(img):
     """format of BGRA: [width, height, channels = 4]
     formate of RGB: [channels = 3, width, height]"""
@@ -82,6 +94,16 @@ def BGRA2RGB(img):
     np_rgb[2, :, :] = img[:, :, 0]
     return np_rgb
 
+def BGR2RGB(img):
+    """format of BGR: [height, width, channels]
+    formate of RGB: [height, width, channels]"""
+    w, h = img.shape[0], img.shape[1]
+    np_rgb = np.zeros(shape = (w, h, 3))
+    np_rgb[:, :, 0] = img[:, :, 2]
+    np_rgb[:, :, 1] = img[:, :, 1]
+    np_rgb[:, :, 2] = img[:, :, 0]
+
+    return np_rgb
 def random_image_test(images):
     im = images[np.random.randint(low = 0, high = images.shape[0])]
     imgplot = plt.imshow(im[1, :, :])
