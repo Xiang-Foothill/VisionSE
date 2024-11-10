@@ -5,6 +5,7 @@ import sys
 import data_utils as du
 import pickle
 import os
+import OP_flow
 
 sys.path.insert(0,'C:/carla/PythonAPI/carla') 
 # To import a basic agent
@@ -45,8 +46,12 @@ def spawn_vehicle(world):
 
     world.data["F"] = findFocal(cam)
     world.data["sensor_height"] = sensor_height
+
     world.data["T"] = T
-    f_recall = make_recall(world)
+    if world.mode == "data":
+        f_recall = make_data_recall(world)
+    else:
+        f_recall = make_exp_recall(world)
     sensor.listen(f_recall)
 
     return ego
@@ -67,7 +72,7 @@ def updata_spectator(world):
     sensor_transform = sensor.get_transform()
     spectator.set_transform(sensor_transform)
 
-def make_recall(world):
+def make_data_recall(world):
     """generate the data_recall function applied when the RGB sensor is listening"""
     def data_recall(image):
         states = world.data["states"]
@@ -84,30 +89,84 @@ def make_recall(world):
 
     return data_recall
 
+def make_exp_recall(world):
+    """make the recall function used for real-time experiment
+    once the image is passed in, use the functions from OP_flow to do real_time speed estimation"""
+    # prepare the world parameters for real_time speed estimation
+    def exp_recall(image):
+        IM_array = np.reshape(np.copy(image.raw_data), (image.height, image.width, 4))
+        IM_array = du.BGRA2RGB(IM_array)
+        IM_array = np.uint8(IM_array)
+        
+        ego = world.actor_list[0]
+        V = ego.get_velocity()
+        real_omega = np.deg2rad(ego.get_angular_velocity().z)
+        V_x, V_y = V.x, V.y
+        real_V = (V_x ** 2 + V_y ** 2) ** 0.5
+
+        world.data["realV"].append(real_V)
+
+        # iteract with the functions from OP_flow to estimate the value of speed
+        params = world.data["parameters"]
+        if params["preImg"] is None:
+            opV = real_V
+            params["preV"] = opV
+            params["preImg"] = IM_array
+        else:
+            params["nextImg"] = IM_array
+            opV, W, preV, preW, preVE, preWE = OP_flow.full_estimator(**params)
+            params["preV"] = preV
+            params["preW"] = preW
+            params["preVE"] = preVE
+            params["preWE"] = preWE
+            params["preImg"] = IM_array
+        
+        world.data["opV"].append(opV)
+        print(f"the OP_flow estimated speed is {opV}, the real_time speed is {real_V}")
+    return exp_recall
+
 def prepareData(world):
-    world.data = {}
     world.data["images"] = []
     world.data["states"] = []
 
 def clear_world(world):
     for actor in world.actor_list:
         actor.destroy()
-    world.data["states"] = np.asarray(world.data["states"])
-    world.data["images"] = np.asarray(world.data["images"])
+    # world.data["states"] = np.asarray(world.data["states"])
+    # world.data["images"] = np.asarray(world.data["images"])
 
 def judge_end(world):
     upper_ticks = 300 # maximum number of ticks allowed for this experiment
-    states = world.data["states"]
+    states = world.data["realV"]
     return len(states) > upper_ticks
 
-def play_game():
+def prepareExp(world):
+    world.data["realV"] = []
+    world.data["opV"] = []
+    # prepare the paprameters for realTime experiment iteration
+    world.data["parameters"] = dict(deltaT = world.data["T"], h = world.data["sensor_height"], f = world.data["F"],
+                                    preImg = None, preV = 0.0, V_discard = 20,
+    W_discard = 5.0,
+    V_noise = 0.05,
+    W_noise = 0.01,
+    preVE = 0.0,
+    preWE = 0.0,
+    preW = 0.0,
+    mode = "onlyV")
+
+def play_game(mode):
     # prepare the world and the client
     client = carla.Client('localhost', 2000)
     world = client.get_world()
     world.actor_list = []
-    prepareData(world)
+    world.mode = mode
     client.set_timeout(10.0)
+    world.data = {}
     ego = spawn_vehicle(world)
+    if world.mode == "data":
+        prepareData(world)
+    if world.mode == "realTime":
+        prepareExp(world)
     set_spectator(world)
 
     # To start a basic agent
@@ -121,10 +180,11 @@ def play_game():
             break
     
     clear_world(world)
-    cur_path = os.getcwd()
-    SE_root = os.path.dirname(cur_path)
-    path_to_save =  SE_root + "/VideoSet/" + "chessCircle.pkl"
-    saveData(world.data, path_to_save)
+    if world.mode == "data":
+        cur_path = os.getcwd()
+        SE_root = os.path.dirname(cur_path)
+        path_to_save =  SE_root + "/VideoSet/" + "chessCircle.pkl"
+        saveData(world.data, path_to_save)
     # du.random_image_test(world.data["images"])
 
 def saveData(data, path):
@@ -132,7 +192,7 @@ def saveData(data, path):
         pickle.dump(data, file)
 
 def __main__():
-    play_game()
+    play_game(mode = "realTime")
 
 if __name__ == "__main__":
     __main__()

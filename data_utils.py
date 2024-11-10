@@ -87,11 +87,11 @@ def BGRA2RGB(img):
     formate of RGB: [channels = 3, width, height]"""
     img = img[:, :, :4]
     w, h = img.shape[0], img.shape[1]
-    np_rgb = np.zeros(shape = (3, w, h))
+    np_rgb = np.zeros(shape = (w, h, 3))
 
-    np_rgb[0, :, :] = img[:, :, 2]
-    np_rgb[1, :, :] = img[:, :, 1]
-    np_rgb[2, :, :] = img[:, :, 0]
+    np_rgb[:, :, 0] = img[:, :, 2]
+    np_rgb[:, :, 1] = img[:, :, 1]
+    np_rgb[:, :, 2] = img[:, :, 0]
     return np_rgb
 
 def BGR2RGB(img):

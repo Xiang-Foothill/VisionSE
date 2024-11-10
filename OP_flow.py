@@ -493,16 +493,17 @@ def regionTest(mode, region_displayed):
     plt.show()
 
 # this function is not workable for the pipeline rightnow
-def full_estimator(pre_img, next_img, deltaT, h, f, preV, V_discard, preW, W_discard, preVE, preWE, V_noise, W_noise, mode):
+def full_estimator(preImg, nextImg, deltaT, h, f, preV, V_discard, preW, W_discard, preVE, preWE, V_noise, W_noise, mode):
     if mode == "onlyV":
-        good_old, good_new, flow = cv_featureLK(pre_img, next_img, deltaT)
+        mask = side_ground(preImg)
+        good_old, good_new, flow = cv_featureLK(preImg, nextImg, deltaT, mask)
         Vs = simpleVego(good_old, flow, h, f)
         Vs = preFilter(Vs, preV, V_discard)
         V, preVE = simpleKalman(Vs, preV, preVE, V_noise)
         preV = V
         W, preW = 0.0, 0.0
     elif mode == "fullEq":
-        good_old, good_new, flow = cv_featureLK(pre_img, next_img, deltaT)
+        good_old, good_new, flow = cv_featureLK(preImg, nextImg, deltaT)
         Vs, Omegas = fullEq(good_old, flow, h, f)
         Vs, Omegas = preFilter(Vs, preV, V_discard), preFilter(Omegas, preW, W_discard)
         V, preVE = simpleKalman(Vs, preV, preVE, V_noise)
