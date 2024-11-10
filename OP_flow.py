@@ -469,7 +469,7 @@ def regionTest(mode, region_displayed):
             if np.random.uniform(low = 0.0, high = 1.0) > 0.95:
                 display_set[f'frame {i}'] = vu.npArrowFlow(pre_img, good_old, good_new)
             
-        return op_V
+        return op_V, display_set
     
     fig, axs = plt.subplots(2, 3)
 
@@ -534,8 +534,8 @@ def main():
     # cv2.imwrite("result1.jpg", image)
     # test_ground_mask(False)
     # V_test()
-    # selectedTest(show_img = True, mode = "fullEq")
-    regionTest("Vx", region_displayed = ["downMiddle"])
+    selectedTest(show_img = False, mode = "onlyV")
+    # regionTest("Vy", region_displayed = ["topRight"])
     # test_ground_mask(draw_arrow = True)
 
 if __name__ == "__main__":
