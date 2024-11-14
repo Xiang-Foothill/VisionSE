@@ -290,7 +290,7 @@ def Dpre(Vs, Vpre):
 # Vs: the new estimations of velocities given by the optical flow of pixels
 # preV: the velocity at t - 1 step
 # preE: the error of estimation of the previous step
-def simpleKalman(Xs, preX, preE, X_noise):
+def simpleKalman(Xs, preX, preE, X_noise, returnStd = False):
     """implement the simple one-variable version of kalman filter
     1. regard all the pixels as one single sensor
     2. the error provided by the measurement of this single sensor is equal to the standard deviation of Vs
@@ -308,7 +308,10 @@ def simpleKalman(Xs, preX, preE, X_noise):
     X = preX + Kalman_gain * (X_mea - preX)
     newE = (1 - Kalman_gain) * preE
 
-    return X, newE
+    if not returnStd:
+        return X, newE
+    if returnStd:
+        return X, newE, E_mea
 
 """####################### TEST FUNCTIONS BELOW ###########################"""
 
@@ -493,13 +496,21 @@ def regionTest(mode, region_displayed):
     plt.show()
 
 # this function is not workable for the pipeline rightnow
-def full_estimator(preImg, nextImg, deltaT, h, f, preV, V_discard, preW, W_discard, preVE, preWE, V_noise, W_noise, mode):
+def full_estimator(preImg, nextImg, deltaT, h, f, preV, V_discard, preW, W_discard, preVE, preWE, V_noise, W_noise, mode, with_std = False):
     if mode == "onlyV":
-        mask = side_ground(preImg)
+        mask = regionGround(preImg, region_name = "downRight")
         good_old, good_new, flow = cv_featureLK(preImg, nextImg, deltaT, mask)
         Vs = simpleVego(good_old, flow, h, f)
+        # mask1, mask2 = side_ground(preImg), bottom_ground(preImg)
+        # good_old1, good_new1, flow1 = cv_featureLK(preImg, nextImg, deltaT, mask1)
+        # good_old2, good_new2, flow2 = cv_featureLK(preImg, nextImg, deltaT, mask2)
+        # good_old = np.concatenate((good_old1, good_old2))
+        # good_new = np.concatenate((good_new1, good_new2))
+        # Vs1, Vs2 = Vx2V(good_old1, flow1, h, f), Vy2V(good_old2, flow2, h, f)
+        # Vs = np.concatenate((Vs1, ))
+
         Vs = preFilter(Vs, preV, V_discard)
-        V, preVE = simpleKalman(Vs, preV, preVE, V_noise)
+        V, preVE, V_std = simpleKalman(Vs, preV, preVE, V_noise, returnStd = True)
         preV = V
         W, preW = 0.0, 0.0
     elif mode == "fullEq":
@@ -510,7 +521,10 @@ def full_estimator(preImg, nextImg, deltaT, h, f, preV, V_discard, preW, W_disca
         W, preWE = simpleKalman(Omegas, preW, preWE, W_noise)
         preV, preW = V, W
 
-    return V, W, preV, preW, preVE, preWE
+    if not with_std:
+        return V, W, preV, preW, preVE, preWE
+    if with_std:
+        return V, W, preV, preW, preVE, preWE, V_std
 
 # test the ground detection function
 # draw_arrow == True when want to test it by drawing flows

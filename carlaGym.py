@@ -24,15 +24,16 @@ def spawn_vehicle(world):
     blueprint = blueprint_library.find("vehicle.audi.a2")
     world_map = world.get_map()
     spawn_points = world_map.generate_waypoints(distance = 0.5)
+    np.random.seed(6) # set the value of the seed so that the experiment is repeatable
     point_index = np.random.randint(low = 0, high = len(spawn_points))
-    ego = world.spawn_actor(blueprint, spawn_points[0].transform)
+    ego = world.spawn_actor(blueprint, spawn_points[point_index].transform)
 
     # attach a rgb camera to the vehicle
     cam = blueprint_library.find("sensor.camera.rgb")
 
     IM_W = 640
     IM_H = 480
-    T = 0.05
+    T = 0.02
 
     cam.set_attribute("image_size_x", f"{IM_W}")
     cam.set_attribute("image_size_y", f"{IM_H}")
@@ -114,7 +115,7 @@ def make_exp_recall(world):
             params["preImg"] = IM_array
         else:
             params["nextImg"] = IM_array
-            opV, W, preV, preW, preVE, preWE = OP_flow.full_estimator(**params)
+            opV, W, preV, preW, preVE, preWE, V_std = OP_flow.full_estimator(**params)
             params["preV"] = preV
             params["preW"] = preW
             params["preVE"] = preVE
@@ -122,6 +123,8 @@ def make_exp_recall(world):
             params["preImg"] = IM_array
         
         world.data["opV"].append(opV)
+        world.data["V_std"].append(V_std)
+
         print(f"the OP_flow estimated speed is {opV}, the real_time speed is {real_V}")
     return exp_recall
 
@@ -136,13 +139,17 @@ def clear_world(world):
     # world.data["images"] = np.asarray(world.data["images"])
 
 def judge_end(world):
-    upper_ticks = 300 # maximum number of ticks allowed for this experiment
-    states = world.data["realV"]
-    return len(states) > upper_ticks
+    upper_ticks = 1200 # maximum number of ticks allowed for this experiment
+    if world.mode == "realTime":
+        judge_array = world.data["realV"]
+    elif world.mode == "data":
+        judge_array = world.data["states"]
+    return len(judge_array) > upper_ticks
 
 def prepareExp(world):
     world.data["realV"] = []
     world.data["opV"] = []
+    world.data["V_std"] = []
     # prepare the paprameters for realTime experiment iteration
     world.data["parameters"] = dict(deltaT = world.data["T"], h = world.data["sensor_height"], f = world.data["F"],
                                     preImg = None, preV = 0.0, V_discard = 20,
@@ -152,7 +159,8 @@ def prepareExp(world):
     preVE = 0.0,
     preWE = 0.0,
     preW = 0.0,
-    mode = "onlyV")
+    mode = "onlyV",
+    with_std = True)
 
 def play_game(mode):
     # prepare the world and the client
@@ -160,9 +168,16 @@ def play_game(mode):
     world = client.get_world()
     world.actor_list = []
     world.mode = mode
-    client.set_timeout(10.0)
+    client.set_timeout(10.0)\
+    
     world.data = {}
     ego = spawn_vehicle(world)
+     # set the world to the synchronous mode
+    settings = world.get_settings()
+    settings.synchronous_mode = True
+    settings.fixed_delta_seconds = world.data["T"] # !!!! Note: to avoid the error of carla simulation, try to set the sensor_tick time as the same value as the world_tick time
+    world.apply_settings(settings)
+
     if world.mode == "data":
         prepareData(world)
     if world.mode == "realTime":
@@ -175,6 +190,7 @@ def play_game(mode):
     while True:
         ego.apply_control(agent.run_step())
         updata_spectator(world)
+        world.tick()
 
         if judge_end(world):
             break
@@ -185,6 +201,16 @@ def play_game(mode):
         SE_root = os.path.dirname(cur_path)
         path_to_save =  SE_root + "/VideoSet/" + "chessCircle.pkl"
         saveData(world.data, path_to_save)
+
+    if world.mode == "realTime":
+        # now plot the data
+        realVs = world.data["realV"]
+        opVs = world.data["opV"]
+        plt.plot(realVs, label = "realV")
+        plt.plot(opVs, label = "opV")
+        plt.plot(world.data["V_std"], label = "V_std")
+        plt.legend()
+        plt.show()
     # du.random_image_test(world.data["images"])
 
 def saveData(data, path):
