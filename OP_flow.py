@@ -29,6 +29,7 @@ def cv_featureLK(preImg, nextImg, deltaT, mask):
         good_new = p1[st == 1]
         good_old = p0[st == 1]
     
+    good_old, good_new = recenter(good_old), recenter(good_new)
     flow = (good_new - good_old) / deltaT
     return good_old, good_new, flow
 
@@ -165,8 +166,8 @@ def recenter(coord):
     # new_coord[:, 0] = np.abs(H * 0.5 - new_coord[:, 0])
     # new_coord[:, 1] = np.abs(new_coord[:, 1] - W * 0.5)
 
-    new_coord[:, 0] = np.abs(H * 0.5 - new_coord[:, 0])
-    new_coord[:, 1] = np.abs(new_coord[:, 1] - W * 0.5)
+    new_coord[:, 0] = H * 0.5 - new_coord[:, 0]
+    new_coord[:, 1] = new_coord[:, 1] - W * 0.5
     return new_coord
 
 def f_str(V):
@@ -179,31 +180,75 @@ def f_str(V):
     
     return V
 
-def VxReg(good_old, flow, h, f):
+def VxReg(good_old, flow, h, f, plot_tool):
     """apply linear regression to find the most optimized estimation of egoVehicle speed
     Vx = (x*y) * (V / hf)
     treat V / hf as the gradient of the line and Vx as the Y value and (x * y) as the X value"""
-    good_old = recenter(good_old)
+    # decide to plot the point ditribution or not
+    index = plot_tool["index"]
+    N = plot_tool["N"]
+    axs = plot_tool["axs"]
+    row = plot_tool["row"]
+    plot_prob = 0.01
+    plot_bool = np.random.uniform(low = 0.0, high = 1.0) < plot_prob
+    plot_bool = plot_prob and index < N
+
     Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
     a = x * y
     b = Vx
+    # b = np.abs(b)
     a = a.reshape((a.shape[0], 1))
     res = np.linalg.lstsq(a, b)
     V = res[0][0] * h * f
-    return V
+    Error = res[1][0] / 3000000
 
-def VyReg(good_old, flow, h, f):
+    if plot_bool:
+        real_grad = plot_tool["realV"] / (h * f)
+        aReal = np.linspace(start = 0, stop = 100000)
+        bReal = aReal * real_grad
+        bEst = aReal * res[0][0]
+        axs[index // row][index % row].scatter(a, b, s = 5)
+        axs[index // row][index % row].plot(aReal, bReal, label = "realV")
+        axs[index // row][index % row].plot(aReal, bEst, label = "opV")
+        axs[index // row][index % row].set_title("Vx vs x * y")
+        axs[index // row][index % row].legend()
+        plot_tool["index"] = index + 1
+    return V, Error
+
+def VyReg(good_old, flow, h, f, plot_tool):
     """apply linear regression to find the most optimized estimation of egoVehicle speed
     Vy = (y ^ 2) * (V / hf)
     treat V / hf as the gradient of the line and Vy as the Y value and (y ^ 2) as the X value"""
-    good_old = recenter(good_old)
+
+    # decide to plot the point ditribution or not
+    index = plot_tool["index"]
+    N = plot_tool["N"]
+    axs = plot_tool["axs"]
+    row = plot_tool["row"]
+    plot_prob = 0.01
+    plot_bool = np.random.uniform(low = 0.0, high = 1.0) < plot_prob
+    plot_bool = plot_prob and index < N
+
     Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
     a = y * y
     b = Vy
+    # b = np.abs(b)
     a = a.reshape((a.shape[0], 1))
     res = np.linalg.lstsq(a, b)
     V = res[0][0] * h * f
-    return V
+    Error = res[1][0] / 3000000
+
+    if plot_bool:
+        real_grad = plot_tool["realV"] / (h * f)
+        aReal = np.linspace(start = 0, stop = 100000)
+        bReal = aReal * real_grad
+        bEst = aReal * res[0][0]
+        axs[index // row][index % row].scatter(a, b, s = 5)
+        axs[index // row][index % row].plot(aReal, bReal, label = "realV")
+        axs[index // row][index % row].plot(aReal, bEst, label = "opV")
+        axs[index // row][index % row].set_title("Vy vs y^2")
+        plot_tool["index"] = index + 1
+    return V, Error
 
 # f_op: the optical flow function to be used
 # deltaT: the time constant between two consecutive frames
@@ -215,7 +260,6 @@ def simpleVego(good_old, flow, h, f):
     Vy = (v * y ^ 2) / (h * f)
     
     find the egomotion velocity by averaging the calculated velocities of all the output flow points given by the f_op function"""
-    good_old = recenter(good_old)
     Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
     v1 = np.abs((Vx * h * f) / (x * y))
     v2 = np.abs((Vy * h * f) / (y * y))
@@ -225,7 +269,6 @@ def Vx2V(good_old, flow, h, f):
     """this function is the same as simpleVego
     However, it only applies the value of Vx to evaluate the speed of the ego vehicle"""
 
-    good_old = recenter(good_old)
     Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
     v1 = np.abs((Vx * h * f) / (x * y))
 
@@ -235,7 +278,6 @@ def Vy2V(good_old, flow, h, f):
     """this function is the same as simpleVego
     However, it only applies the value of Vy to evaluate the speed of the ego vehicle"""
 
-    good_old = recenter(good_old)
     Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
     v2 = np.abs((Vy * h * f) / (y * y))
     return v2
@@ -243,7 +285,6 @@ def Vy2V(good_old, flow, h, f):
 def Vx2W(good_old, flow, h, f):
     """find the value of angular velocities based on purely Vx
     all the points in good_old are assumed to have x_coordinates with very small values"""
-    good_old = recenter(good_old)
     Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
     Ws = Vx / f
     return - Ws
@@ -338,6 +379,20 @@ def simpleKalman(Xs, preX, preE, X_noise, returnStd = False):
         return X, newE
     if returnStd:
         return X, newE, E_mea
+
+# preXs: the history records of the X values
+#windowSize: the size of the sliding window with which we are going to perform Kalman filter
+#newX: the value of newly measured X
+def SWKalman(preXs, windowSize, newX, newE = 2.0):
+    """implement kalman filter with the idea of sliding window:
+    use the window to take samples from past measured values of X (assume the errors are the samples standard deviation)
+    use these samples to combine with the newly measured X"""
+    sampleX = preXs[- windowSize : ] # take samples from the nearest window-sized samples
+    preX, preE = np.average(sampleX), np.std(sampleX)
+    Kalman_gain = preE / (preE + newE)
+    X = preX + Kalman_gain * (newX - preX)
+
+    return X
 
 """####################### TEST FUNCTIONS BELOW ###########################"""
 
@@ -522,14 +577,16 @@ def regionTest(mode, region_displayed):
     plt.show()
 
 # this function is not workable for the pipeline rightnow
-def full_estimator(preImg, nextImg, deltaT, h, f, preV, V_discard, preW, W_discard, preVE, preWE, V_noise, W_noise, mode, with_std = False):
+def full_estimator(preImg, nextImg, deltaT, h, f, preV, V_discard, preW, W_discard, preVE, preWE, V_noise, W_noise, history, mode, plot_tool, with_std = False):
     if mode == "onlyV":
         mask = regionGround(preImg, region_name = "downLeft")
         mask = G_cutoff(preImg)
         good_old, good_new, flow = cv_featureLK(preImg, nextImg, deltaT, mask)
-        V_yest = VyReg(good_old, flow, h, f)
-        V_xest = VxReg(good_old, flow, h, f)
+        V_yest, E_yest = VyReg(good_old, flow, h, f, plot_tool = plot_tool)
+        V_xest, E_xest = VxReg(good_old, flow, h, f, plot_tool = plot_tool)
         V = (V_yest + V_xest) / 2 # take the average of the speed estimated from the x_direction and the y_direction
+        Error = (E_yest + E_xest) / 2
+        filtered_V = SWKalman(history, windowSize = min(len(history), 10), newX = V, newE = Error)
         # Vs = simpleVego(good_old, flow, h, f)
         # mask1, mask2 = side_ground(preImg), bottom_ground(preImg)
         # good_old1, good_new1, flow1 = cv_featureLK(preImg, nextImg, deltaT, mask1)
@@ -552,9 +609,9 @@ def full_estimator(preImg, nextImg, deltaT, h, f, preV, V_discard, preW, W_disca
         preV, preW = V, W
 
     if not with_std:
-        return V, W, preV, preW, preVE, preWE
+        return V, W, preV, preW, preVE, preWE, filtered_V
     if with_std:
-        return V, W, preV, preW, preVE, preWE, V_std
+        return V, W, preV, preW, preVE, preWE, filtered_V, V_std
 
 # test the ground detection function
 # draw_arrow == True when want to test it by drawing flows

@@ -106,7 +106,7 @@ def make_exp_recall(world):
         real_V = (V_x ** 2 + V_y ** 2) ** 0.5
 
         world.data["realV"].append(real_V)
-
+        world.plot["realV"] = real_V
         # iteract with the functions from OP_flow to estimate the value of speed
         params = world.data["parameters"]
         if params["preImg"] is None:
@@ -115,7 +115,7 @@ def make_exp_recall(world):
             params["preImg"] = IM_array
         else:
             params["nextImg"] = IM_array
-            opV, W, preV, preW, preVE, preWE = OP_flow.full_estimator(**params)
+            opV, W, preV, preW, preVE, preWE, filtered_V = OP_flow.full_estimator(**params)
             params["preV"] = preV
             params["preW"] = preW
             params["preVE"] = preVE
@@ -123,9 +123,10 @@ def make_exp_recall(world):
             params["preImg"] = IM_array
         
         world.data["opV"].append(opV)
+        world.data["filtered_V"].append(filtered_V)
         # world.data["V_std"].append(V_std)
 
-        print(f"the OP_flow estimated speed is {opV}, the real_time speed is {real_V}")
+        print(f"the OP_flow estimated speed is {filtered_V}, the real_time speed is {real_V}")
     return exp_recall
 
 def prepareData(world):
@@ -139,7 +140,7 @@ def clear_world(world):
     # world.data["images"] = np.asarray(world.data["images"])
 
 def judge_end(world):
-    upper_ticks = 2400 # maximum number of ticks allowed for this experiment
+    upper_ticks = 1500 # maximum number of ticks allowed for this experiment
     if world.mode == "realTime":
         judge_array = world.data["realV"]
     elif world.mode == "data":
@@ -150,6 +151,13 @@ def prepareExp(world):
     world.data["realV"] = []
     world.data["opV"] = []
     world.data["V_std"] = []
+    world.data["filtered_V"] = []
+    world.plot = {}
+    world.plot["index"] = 0
+    world.plot["N"] = 12
+    world.plot["row"] = 5
+    fig, axs = plt.subplots(world.plot["N"] // world.plot["row"] + 1, world.plot["row"])
+    world.plot["axs"] = axs
     # prepare the paprameters for realTime experiment iteration
     world.data["parameters"] = dict(deltaT = world.data["T"], h = world.data["sensor_height"], f = world.data["F"],
                                     preImg = None, preV = 0.0, V_discard = 20,
@@ -159,7 +167,9 @@ def prepareExp(world):
     preVE = 0.0,
     preWE = 0.0,
     preW = 0.0,
+    history = world.data["opV"],
     mode = "onlyV",
+    plot_tool = world.plot,
     with_std = False)
 
 def play_game(mode):
@@ -207,8 +217,9 @@ def play_game(mode):
         realVs = world.data["realV"]
         opVs = world.data["opV"]
         plt.plot(realVs, label = "realV")
-        plt.plot(opVs, label = "opV")
+        # plt.plot(opVs, label = "opV")
         plt.plot(world.data["V_std"], label = "V_std")
+        plt.plot(world.data["filtered_V"], label = "filtered_V")
         plt.legend()
         plt.show()
     # du.random_image_test(world.data["images"])
