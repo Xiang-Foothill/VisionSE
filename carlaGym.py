@@ -24,7 +24,7 @@ def spawn_vehicle(world):
     blueprint = blueprint_library.find("vehicle.audi.a2")
     world_map = world.get_map()
     spawn_points = world_map.generate_waypoints(distance = 0.5)
-    np.random.seed(6) # set the value of the seed so that the experiment is repeatable
+    np.random.seed(10) # set the value of the seed so that the experiment is repeatable
     point_index = np.random.randint(low = 0, high = len(spawn_points))
     ego = world.spawn_actor(blueprint, spawn_points[point_index].transform)
 
@@ -115,7 +115,7 @@ def make_exp_recall(world):
             params["preImg"] = IM_array
         else:
             params["nextImg"] = IM_array
-            opV, W, preV, preW, preVE, preWE, V_std = OP_flow.full_estimator(**params)
+            opV, W, preV, preW, preVE, preWE = OP_flow.full_estimator(**params)
             params["preV"] = preV
             params["preW"] = preW
             params["preVE"] = preVE
@@ -123,7 +123,7 @@ def make_exp_recall(world):
             params["preImg"] = IM_array
         
         world.data["opV"].append(opV)
-        world.data["V_std"].append(V_std)
+        # world.data["V_std"].append(V_std)
 
         print(f"the OP_flow estimated speed is {opV}, the real_time speed is {real_V}")
     return exp_recall
@@ -139,7 +139,7 @@ def clear_world(world):
     # world.data["images"] = np.asarray(world.data["images"])
 
 def judge_end(world):
-    upper_ticks = 1200 # maximum number of ticks allowed for this experiment
+    upper_ticks = 2400 # maximum number of ticks allowed for this experiment
     if world.mode == "realTime":
         judge_array = world.data["realV"]
     elif world.mode == "data":
@@ -160,7 +160,7 @@ def prepareExp(world):
     preWE = 0.0,
     preW = 0.0,
     mode = "onlyV",
-    with_std = True)
+    with_std = False)
 
 def play_game(mode):
     # prepare the world and the client

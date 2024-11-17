@@ -179,6 +179,32 @@ def f_str(V):
     
     return V
 
+def VxReg(good_old, flow, h, f):
+    """apply linear regression to find the most optimized estimation of egoVehicle speed
+    Vx = (x*y) * (V / hf)
+    treat V / hf as the gradient of the line and Vx as the Y value and (x * y) as the X value"""
+    good_old = recenter(good_old)
+    Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
+    a = x * y
+    b = Vx
+    a = a.reshape((a.shape[0], 1))
+    res = np.linalg.lstsq(a, b)
+    V = res[0][0] * h * f
+    return V
+
+def VyReg(good_old, flow, h, f):
+    """apply linear regression to find the most optimized estimation of egoVehicle speed
+    Vy = (y ^ 2) * (V / hf)
+    treat V / hf as the gradient of the line and Vy as the Y value and (y ^ 2) as the X value"""
+    good_old = recenter(good_old)
+    Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
+    a = y * y
+    b = Vy
+    a = a.reshape((a.shape[0], 1))
+    res = np.linalg.lstsq(a, b)
+    V = res[0][0] * h * f
+    return V
+
 # f_op: the optical flow function to be used
 # deltaT: the time constant between two consecutive frames
 # This method has poor performance for speed estimation
@@ -498,9 +524,13 @@ def regionTest(mode, region_displayed):
 # this function is not workable for the pipeline rightnow
 def full_estimator(preImg, nextImg, deltaT, h, f, preV, V_discard, preW, W_discard, preVE, preWE, V_noise, W_noise, mode, with_std = False):
     if mode == "onlyV":
-        mask = regionGround(preImg, region_name = "downRight")
+        mask = regionGround(preImg, region_name = "downLeft")
+        mask = G_cutoff(preImg)
         good_old, good_new, flow = cv_featureLK(preImg, nextImg, deltaT, mask)
-        Vs = simpleVego(good_old, flow, h, f)
+        V_yest = VyReg(good_old, flow, h, f)
+        V_xest = VxReg(good_old, flow, h, f)
+        V = (V_yest + V_xest) / 2 # take the average of the speed estimated from the x_direction and the y_direction
+        # Vs = simpleVego(good_old, flow, h, f)
         # mask1, mask2 = side_ground(preImg), bottom_ground(preImg)
         # good_old1, good_new1, flow1 = cv_featureLK(preImg, nextImg, deltaT, mask1)
         # good_old2, good_new2, flow2 = cv_featureLK(preImg, nextImg, deltaT, mask2)
@@ -509,8 +539,8 @@ def full_estimator(preImg, nextImg, deltaT, h, f, preV, V_discard, preW, W_disca
         # Vs1, Vs2 = Vx2V(good_old1, flow1, h, f), Vy2V(good_old2, flow2, h, f)
         # Vs = np.concatenate((Vs1, ))
 
-        Vs = preFilter(Vs, preV, V_discard)
-        V, preVE, V_std = simpleKalman(Vs, preV, preVE, V_noise, returnStd = True)
+        # Vs = preFilter(Vs, preV, V_discard)
+        # V, preVE, V_std = simpleKalman(Vs, preV, preVE, V_noise, returnStd = True)
         preV = V
         W, preW = 0.0, 0.0
     elif mode == "fullEq":
@@ -549,9 +579,11 @@ def main():
     # cv2.imwrite("result1.jpg", image)
     # test_ground_mask(False)
     # V_test()
-    selectedTest(show_img = False, mode = "onlyV")
-    # regionTest("Vy", region_displayed = ["topRight"])
+    # selectedTest(show_img = False, mode = "onlyV")
+    regionTest("Vy", region_displayed = ["downRight"])
     # test_ground_mask(draw_arrow = True)
 
 if __name__ == "__main__":
     main()
+
+# homography rectify
