@@ -126,7 +126,7 @@ def make_exp_recall(world):
         world.data["filtered_V"].append(filtered_V)
         # world.data["V_std"].append(V_std)
 
-        print(f"the OP_flow estimated speed is {filtered_V}, the real_time speed is {real_V}")
+        print(f"the OP_flow estimated speed is {opV}, the real_time speed is {real_V}")
     return exp_recall
 
 def prepareData(world):

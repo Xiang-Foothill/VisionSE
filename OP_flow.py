@@ -29,7 +29,7 @@ def cv_featureLK(preImg, nextImg, deltaT, mask):
         good_new = p1[st == 1]
         good_old = p0[st == 1]
     
-    good_old, good_new = recenter(good_old), recenter(good_new)
+    good_old, good_new = downRecenter(good_old), downRecenter(good_new)
     flow = (good_new - good_old) / deltaT
     return good_old, good_new, flow
 
@@ -70,7 +70,7 @@ def G_cutoff(img: np.array) -> np.array:
     H, W = img.shape[0], img.shape[1]
     # define the height and width of the ground zone
     ground_H = 300
-    ground_W = 600
+    ground_W = 630
     bottom_center = W * 0.5
     ground_start = 0
 
@@ -170,6 +170,20 @@ def recenter(coord):
     new_coord[:, 1] = new_coord[:, 1] - W * 0.5
     return new_coord
 
+# coord: the coordinates of the pixels to be changed
+def downRecenter(coord):
+    """relocate the origin of the pixel system to the center of the image plane
+    the original pixel system takes the top-left corner as (0, 0)
+    Different from the recenter function, this function relocates coordinates so that the positive y-direction is downward"""
+    new_coord = coord.copy()
+    W = 640
+    H = 480
+
+    new_coord[:, 0] = new_coord[:, 0] - H * 0.5 # change the y-coordinates
+    new_coord[:, 1] = new_coord[:, 1] - W * 0.5 # change the x-coordinates
+
+    return new_coord
+
 def f_str(V):
     """saturation function that prevents the speed estimation from overshooting"""
     #check if the observed velocity is abnormal, if the velocity measured is abnormal, set it to 1
@@ -247,6 +261,7 @@ def VyReg(good_old, flow, h, f, plot_tool):
         axs[index // row][index % row].plot(aReal, bReal, label = "realV")
         axs[index // row][index % row].plot(aReal, bEst, label = "opV")
         axs[index // row][index % row].set_title("Vy vs y^2")
+        axs[index // row][index % row].legend()
         plot_tool["index"] = index + 1
     return V, Error
 
@@ -579,14 +594,16 @@ def regionTest(mode, region_displayed):
 # this function is not workable for the pipeline rightnow
 def full_estimator(preImg, nextImg, deltaT, h, f, preV, V_discard, preW, W_discard, preVE, preWE, V_noise, W_noise, history, mode, plot_tool, with_std = False):
     if mode == "onlyV":
-        mask = regionGround(preImg, region_name = "downLeft")
-        mask = G_cutoff(preImg)
+        mask = regionGround(preImg, region_name = "topRight")
+        # mask = G_cutoff(preImg)
         good_old, good_new, flow = cv_featureLK(preImg, nextImg, deltaT, mask)
         V_yest, E_yest = VyReg(good_old, flow, h, f, plot_tool = plot_tool)
-        V_xest, E_xest = VxReg(good_old, flow, h, f, plot_tool = plot_tool)
+        # V_xest, E_xest = VxReg(good_old, flow, h, f, plot_tool = plot_tool)
+        V_xest, E_xest = 0, 0
         V = (V_yest + V_xest) / 2 # take the average of the speed estimated from the x_direction and the y_direction
         Error = (E_yest + E_xest) / 2
         filtered_V = SWKalman(history, windowSize = min(len(history), 10), newX = V, newE = Error)
+
         # Vs = simpleVego(good_old, flow, h, f)
         # mask1, mask2 = side_ground(preImg), bottom_ground(preImg)
         # good_old1, good_new1, flow1 = cv_featureLK(preImg, nextImg, deltaT, mask1)
@@ -598,6 +615,7 @@ def full_estimator(preImg, nextImg, deltaT, h, f, preV, V_discard, preW, W_disca
 
         # Vs = preFilter(Vs, preV, V_discard)
         # V, preVE, V_std = simpleKalman(Vs, preV, preVE, V_noise, returnStd = True)
+        
         preV = V
         W, preW = 0.0, 0.0
     elif mode == "fullEq":
