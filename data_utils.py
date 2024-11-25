@@ -8,6 +8,7 @@ BARC_PATH = "ParaDriveLocalComparison_Oct1_enc_0.npz"
 CARLA_PATH1 = "carlaData1.pkl"
 CARLA_PATH2 = "carlaData2.pkl"
 CHESS_STRAIGHT = "carlaData3.pkl"
+CHESS_STRAIGHT2 = "chessStraight2.pkl"
 CHESS_CIRCLE = "ChessCircle.pkl"
 BARC_H = 0.123 # the height of the camera from the horizontal graound 
 BARC_F = 605.5 # focal length in terms of pixels - [pixels]
@@ -45,7 +46,10 @@ def parse_barc_data(dataset_path = CHESS_STRAIGHT, Omega_exist = False) -> Tuple
     #     ax.set_title(f"#{idx}\t" + "$v_{long} = $" + f"{states[idx, 0]:.2f}")
     # plt.show()
 
-    # return images, states[:, 0]  # longitudinal velocity mangnitude 
+    # return images, states[:, 0]  # longitudinal velocity mangnitude
+    images = np.asarray(images)
+    print(images.shape)
+    states = np.asarray(states)
     images = to_cvChannels(images)
 
     if Omega_exist:

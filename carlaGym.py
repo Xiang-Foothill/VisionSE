@@ -24,7 +24,7 @@ def spawn_vehicle(world):
     blueprint = blueprint_library.find("vehicle.audi.a2")
     world_map = world.get_map()
     spawn_points = world_map.generate_waypoints(distance = 0.5)
-    np.random.seed(10) # set the value of the seed so that the experiment is repeatable
+    np.random.seed(14) # set the value of the seed so that the experiment is repeatable
     point_index = np.random.randint(low = 0, high = len(spawn_points))
     ego = world.spawn_actor(blueprint, spawn_points[point_index].transform)
 
@@ -33,7 +33,7 @@ def spawn_vehicle(world):
 
     IM_W = 640
     IM_H = 480
-    T = 0.02
+    T = 0.04
 
     cam.set_attribute("image_size_x", f"{IM_W}")
     cam.set_attribute("image_size_y", f"{IM_H}")
@@ -140,7 +140,7 @@ def clear_world(world):
     # world.data["images"] = np.asarray(world.data["images"])
 
 def judge_end(world):
-    upper_ticks = 1500 # maximum number of ticks allowed for this experiment
+    upper_ticks = 500 # maximum number of ticks allowed for this experiment
     if world.mode == "realTime":
         judge_array = world.data["realV"]
     elif world.mode == "data":
@@ -209,7 +209,7 @@ def play_game(mode):
     if world.mode == "data":
         cur_path = os.getcwd()
         SE_root = os.path.dirname(cur_path)
-        path_to_save =  SE_root + "/VideoSet/" + "chessCircle.pkl"
+        path_to_save =  SE_root + "/VideoSet/" + "chessStraight2.pkl"
         saveData(world.data, path_to_save)
 
     if world.mode == "realTime":
@@ -229,7 +229,7 @@ def saveData(data, path):
         pickle.dump(data, file)
 
 def __main__():
-    play_game(mode = "realTime")
+    play_game(mode = "data")
 
 if __name__ == "__main__":
     __main__()

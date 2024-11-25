@@ -12,7 +12,7 @@ def cv_featureLK(preImg, nextImg, deltaT, mask):
     2. calculate the optical-flow values of these points"""
     
     # set the parameters for Lukas-Kanade method
-    lk_params = dict( winSize  = (15, 15),
+    lk_params = dict( winSize  = (8, 8),
                   maxLevel = 2,
                   criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
     
@@ -24,13 +24,14 @@ def cv_featureLK(preImg, nextImg, deltaT, mask):
 
     #Calculate the values of the optical Flow
     p1, st, err = cv2.calcOpticalFlowPyrLK(old_gray, new_Gray, p0, None,  **lk_params)
-
+    """CAREFULL!!!!!! both p0 and p1 are in the form of (xs, ys) instead of (ys, xs) in the conventional representation of image coordinates in which 0th place is for vertical position and 1th place is for horizontal position"""
     if p1 is not None:
         good_new = p1[st == 1]
         good_old = p0[st == 1]
     
     good_old, good_new = downRecenter(good_old), downRecenter(good_new)
     flow = (good_new - good_old) / deltaT
+
     return good_old, good_new, flow
 
 def get_Trackpoints(img, ground_mask):
@@ -179,8 +180,19 @@ def downRecenter(coord):
     W = 640
     H = 480
 
-    new_coord[:, 0] = new_coord[:, 0] - H * 0.5 # change the y-coordinates
-    new_coord[:, 1] = new_coord[:, 1] - W * 0.5 # change the x-coordinates
+    new_coord[:, 0] = new_coord[:, 0] - W * 0.5 # change the x-coordinates
+    new_coord[:, 1] = new_coord[:, 1] - H * 0.5 # change the y-coordinates
+
+    return new_coord
+
+def centerBack(coord):
+    """relocate the origin of the pixel system back to the top left"""
+    new_coord = coord.copy()
+    W = 640
+    H = 480
+
+    new_coord[:, 0] = new_coord[:, 0] + W * 0.5 # change the y-coordinates
+    new_coord[:, 1] = new_coord[:, 1] + H * 0.5 # change the x-coordinates
 
     return new_coord
 
@@ -207,7 +219,7 @@ def VxReg(good_old, flow, h, f, plot_tool):
     plot_bool = np.random.uniform(low = 0.0, high = 1.0) < plot_prob
     plot_bool = plot_prob and index < N
 
-    Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
+    Vx, Vy, x, y = flow[:, 0], flow[:, 1], good_old[:, 0], good_old[:, 1]
     a = x * y
     b = Vx
     # b = np.abs(b)
@@ -243,7 +255,7 @@ def VyReg(good_old, flow, h, f, plot_tool):
     plot_bool = np.random.uniform(low = 0.0, high = 1.0) < plot_prob
     plot_bool = plot_prob and index < N
 
-    Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
+    Vx, Vy, x, y = flow[:, 0], flow[:, 1], good_old[:, 0], good_old[:, 1]
     a = y * y
     b = Vy
     # b = np.abs(b)
@@ -275,7 +287,7 @@ def simpleVego(good_old, flow, h, f):
     Vy = (v * y ^ 2) / (h * f)
     
     find the egomotion velocity by averaging the calculated velocities of all the output flow points given by the f_op function"""
-    Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
+    Vx, Vy, x, y = flow[:, 0], flow[:, 1], good_old[:, 0], good_old[:, 1]
     v1 = np.abs((Vx * h * f) / (x * y))
     v2 = np.abs((Vy * h * f) / (y * y))
     return np.concatenate((v1, v2))
@@ -284,7 +296,7 @@ def Vx2V(good_old, flow, h, f):
     """this function is the same as simpleVego
     However, it only applies the value of Vx to evaluate the speed of the ego vehicle"""
 
-    Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
+    Vx, Vy, x, y = flow[:, 0], flow[:, 1], good_old[:, 0], good_old[:, 1]
     v1 = np.abs((Vx * h * f) / (x * y))
 
     return v1
@@ -293,14 +305,14 @@ def Vy2V(good_old, flow, h, f):
     """this function is the same as simpleVego
     However, it only applies the value of Vy to evaluate the speed of the ego vehicle"""
 
-    Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
+    Vx, Vy, x, y = flow[:, 0], flow[:, 1], good_old[:, 0], good_old[:, 1]
     v2 = np.abs((Vy * h * f) / (y * y))
     return v2
 
 def Vx2W(good_old, flow, h, f):
     """find the value of angular velocities based on purely Vx
     all the points in good_old are assumed to have x_coordinates with very small values"""
-    Vx, Vy, x, y = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
+    Vx, Vy, x, y = flow[:, 0], flow[:, 1], good_old[:, 0], good_old[:, 1]
     Ws = Vx / f
     return - Ws
 
@@ -321,7 +333,7 @@ def fullEq(good_old, flow, h, f):
     where a = omega / f
     b = v / hf"""
     good_old = recenter(good_old)
-    Vxs, Vys, xs, ys = flow[:, 1], flow[:, 0], good_old[:, 1], good_old[:, 0]
+    Vxs, Vys, xs, ys = flow[:, 0], flow[:, 1], good_old[:, 0], good_old[:, 1]
 
     #TO DO: replace the following codes with numy broadcasting operations to make it faster
     N = len(Vxs)
@@ -466,10 +478,11 @@ def selectedTest(show_img, mode):
             mask1, mask2 = side_ground(pre_img), bottom_ground(pre_img)
             good_old1, good_new1, flow1 = cv_featureLK(pre_img, next_img, deltaT, mask1)
             good_old2, good_new2, flow2 = cv_featureLK(pre_img, next_img, deltaT, mask2)
+            flow = np.concatenate((flow1, flow2))
             good_old = np.concatenate((good_old1, good_old2))
             good_new = np.concatenate((good_new1, good_new2))
             Vs1, Vs2 = Vx2V(good_old1, flow1, h, f), Vy2V(good_old2, flow2, h, f)
-            Vs = np.concatenate((Vs1, ))
+            Vs = np.concatenate((Vs2, ))
             Vs = preFilter(Vs, preV, V_discard)
             V, preVE = simpleKalman(Vs, preV, preVE, V_noise)
             preV = V
@@ -496,6 +509,15 @@ def selectedTest(show_img, mode):
         op_V.append(V), OP_Omega.append(W)
         print(f"At the frame {i}: V_estimated = {V} real_V = {real_V[i]}; W_estimated = {W}, real_W = {real_Omega[i]}")
         if show_img:
+            Vx, Vy, x, y = flow[:, 0], flow[:, 1], good_old[:, 0], good_old[:, 1]
+            real_grad = real_V[i] / (h * f)
+            aReal = np.linspace(start = 0, stop = 100000)
+            bReal = aReal * real_grad
+            a = x * y
+            b = Vx
+            plt.scatter(a, b, s = 5)
+            plt.plot(aReal, bReal, label = "realV")
+            plt.show()
             vu.drawFlow(pre_img, good_old, good_new)
     
     # plt.plot(real_V[start_frame:start_frame + sample_size], label = "real_V")
@@ -585,10 +607,6 @@ def regionTest(mode, region_displayed):
         axs[index].set_title(cur_region)
         axs[index].legend()
 
-        if cur_region in region_displayed:
-            plt.figure(cur_region)
-            vu.show_IM_window(cur_list)
-
     plt.show()
 
 # this function is not workable for the pipeline rightnow
@@ -599,7 +617,7 @@ def full_estimator(preImg, nextImg, deltaT, h, f, preV, V_discard, preW, W_disca
         good_old, good_new, flow = cv_featureLK(preImg, nextImg, deltaT, mask)
         V_yest, E_yest = VyReg(good_old, flow, h, f, plot_tool = plot_tool)
         # V_xest, E_xest = VxReg(good_old, flow, h, f, plot_tool = plot_tool)
-        V_xest, E_xest = 0, 0
+        V_xest, E_xest = V_yest, 0
         V = (V_yest + V_xest) / 2 # take the average of the speed estimated from the x_direction and the y_direction
         Error = (E_yest + E_xest) / 2
         filtered_V = SWKalman(history, windowSize = min(len(history), 10), newX = V, newE = Error)
@@ -654,8 +672,8 @@ def main():
     # cv2.imwrite("result1.jpg", image)
     # test_ground_mask(False)
     # V_test()
-    # selectedTest(show_img = False, mode = "onlyV")
-    regionTest("Vy", region_displayed = ["downRight"])
+    selectedTest(show_img = False, mode = "onlyV")
+    # regionTest("Vy", region_displayed = ["downRight"])
     # test_ground_mask(draw_arrow = True)
 
 if __name__ == "__main__":
