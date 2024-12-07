@@ -460,7 +460,7 @@ def selectedTest(show_img, mode):
     op_V = []
     OP_Omega = []
 
-    start_frame = 20
+    start_frame = 80
     sample_size = 100
     preV = real_V[start_frame]
     preW = real_Omega[start_frame]
@@ -513,8 +513,8 @@ def selectedTest(show_img, mode):
             real_grad = real_V[i] / (h * f)
             aReal = np.linspace(start = 0, stop = 100000)
             bReal = aReal * real_grad
-            a = x * y
-            b = Vx
+            a = y* y
+            b = Vy
             plt.scatter(a, b, s = 5)
             plt.plot(aReal, bReal, label = "realV")
             plt.show()
@@ -540,7 +540,7 @@ def regionTest(mode, region_displayed):
     images, real_V, real_Omega, f, h, deltaT = du.parse_barc_data(Omega_exist=True)
     OP_Omega = []
 
-    start_frame = 20
+    start_frame = 60
     sample_size = 100
     preV = real_V[start_frame]
     preW = real_Omega[start_frame]
@@ -672,7 +672,7 @@ def main():
     # cv2.imwrite("result1.jpg", image)
     # test_ground_mask(False)
     # V_test()
-    selectedTest(show_img = False, mode = "onlyV")
+    selectedTest(show_img = True, mode = "onlyV")
     # regionTest("Vy", region_displayed = ["downRight"])
     # test_ground_mask(draw_arrow = True)
 

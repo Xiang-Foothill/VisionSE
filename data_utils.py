@@ -9,12 +9,13 @@ CARLA_PATH1 = "carlaData1.pkl"
 CARLA_PATH2 = "carlaData2.pkl"
 CHESS_STRAIGHT = "carlaData3.pkl"
 CHESS_STRAIGHT2 = "chessStraight2.pkl"
+CHESS_STRAIGHT3 = "chessStraight3.pkl"
 CHESS_CIRCLE = "ChessCircle.pkl"
 BARC_H = 0.123 # the height of the camera from the horizontal graound 
 BARC_F = 605.5 # focal length in terms of pixels - [pixels]
 BARC_T = 0.1
 
-def parse_barc_data(dataset_path = CHESS_STRAIGHT, Omega_exist = False) -> Tuple[np.ndarray, np.ndarray]:
+def parse_barc_data(dataset_path = CHESS_STRAIGHT2, Omega_exist = False) -> Tuple[np.ndarray, np.ndarray]:
     """
     @param dataset_path: Path to the dataset npz file. 
     @param Omega_exist: if the values of angular velocities should be returned or not, if they need to be returned, return in the form: [Images, real_Vs, real_Omegas, F, h, T]
@@ -48,7 +49,6 @@ def parse_barc_data(dataset_path = CHESS_STRAIGHT, Omega_exist = False) -> Tuple
 
     # return images, states[:, 0]  # longitudinal velocity mangnitude
     images = np.asarray(images)
-    print(images.shape)
     states = np.asarray(states)
     images = to_cvChannels(images)
 
