@@ -62,7 +62,24 @@ def parse_barc_data(dataset_path = CHESS_STRAIGHT2, Omega_exist = False) -> Tupl
             return images, np.linalg.norm(states[:, :2], axis=1), data["F"], data["sensor_height"], data["T"]  # velocity magnitude 
         else:
             return images, np.linalg.norm(states[:, :2], axis=1), BARC_F, BARC_H, BARC_T
-        
+
+def full_parse(dataset_path = CHESS_STRAIGHT2) -> Tuple[np.ndarray, np.ndarray]:
+    """the order of parameters returned:
+    images, V_tran, V_long, w, f, h, deltaT"""
+    cur_path = os.getcwd()
+    SE_root = os.path.dirname(cur_path)
+    dataset_path = SE_root + "/VideoSet/" + dataset_path
+    data = np.load(dataset_path, allow_pickle=True)
+    images, states = data['images'], data['states']
+    images = np.asarray(images)
+    states = np.asarray(states)
+    images = to_cvChannels(images)
+
+    if "F" in data:
+        return images, np.linalg.norm(states[:, :2], axis=1), states[:, 2], data["F"], data["sensor_height"], data["T"]  # velocity magnitude 
+    else:
+        return images, np.linalg.norm(states[:, :2], axis=1), states[:, 1], states[:, 2], BARC_F, BARC_H, BARC_T
+
 def to_cvChannels(img):
     """convert the RGB image from the numpy format to the cv2 format
     cv2 format: [N, height, width, channels]
