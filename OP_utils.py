@@ -21,6 +21,7 @@ def cv_featureLK(preImg, nextImg, deltaT, mask):
     new_Gray = cv2.cvtColor(nextImg, cv2.COLOR_BGR2GRAY)
 
     p0 = get_Trackpoints(old_gray, mask)
+    # p0 = add_track_points(p0)
 
     #Calculate the values of the optical Flow
     p1, st, err = cv2.calcOpticalFlowPyrLK(old_gray, new_Gray, p0, None,  **lk_params)
@@ -60,6 +61,28 @@ def get_Trackpoints(img, ground_mask):
         return cv2.goodFeaturesToTrack(img, mask = None, **feature_params)
     else:
         return p0
+
+def add_track_points(p0):
+    """in real life situations, there might not be that many good features to track on the ground, which may lead to a very small number of available data points that can be used for regression
+    this function aims to add data points, so that more optical values can be found and used for regression"""
+
+    threshold = 80 # the threshold over which we treat the number of data points as enough
+
+    if p0.shape[0] >= threshold:
+        return p0 # if we have enough data points for regression return p0 directly
+    
+    # decide the upper and lower boundary in which the points can be generated
+    x_low, x_high, y_low, y_high = 10, 630, 250, 470 # be careful that such coordinates refer to the coordinates before the DOWNCENTER function is applied
+
+    np.random.seed(0)
+    # now add points randomly
+    for _ in range(threshold - p0.shape[0]):
+        x_new, y_new = np.random.randint(low = x_low, high = x_high), np.random.randint(low = y_low, high = y_high)
+        p0 = np.concatenate((p0, np.asarray([[[x_new, y_new]]])), axis = 0)
+
+    p0 = p0.astype(np.float32) # the above python opretions change the data type for the coordinate array, reshape it back to float 32
+
+    return p0
 
 # coord: the coordinates of the pixels to be changed
 def downRecenter(coord):

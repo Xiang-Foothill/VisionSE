@@ -10,20 +10,29 @@ def raw_test():
     est_Vt, est_Vl, est_w = [], [], [] # values that are optimized by Kalman filter and other algorithms
     Errors = [] # record the errors of past estimations
     start_frame = 20
-    end_frame = 500
+    end_frame = 400
 
     for i in range(start_frame, end_frame):
         preImg, nextImg = images[i], images[i + 1]
         mask = pu.G_cutoff(preImg)
         good_old, good_new, flow = pu.cv_featureLK(preImg, nextImg, deltaT, mask)
 
+        print(f"""---- Inspecting the size of the data points of frame {i}--------
+Before the prefilter: {good_old.shape[0]}""")
+        
         good_old, flow = em.pre_filter(good_old, flow, h, f, op_Vl, op_w)
 
-        V_long, w, Error = em.WVReg(good_old, flow, h, f) # use egomotion estimation function to estimate the ego motion
+        print(f"after pre_filter: {good_old.shape[0]}")
 
-        # apply optimization algorithms here
-        final_V_long = em.Kalman_filter(op_Vl, Errors, V_long, Error)
-        final_w = em.Kalman_filter(op_w, Errors, w, Error)
+        try:
+          V_long, w, Error = em.WVReg(good_old, flow, h, f) # use egomotion estimation function to estimate the ego motion
+          # apply optimization algorithms here
+          final_V_long = em.Kalman_filter(op_Vl, Errors, V_long, Error)
+          final_w = em.Kalman_filter(op_w, Errors, w, Error)
+
+          # sometimes there might be some extreme conditions that make regression failed, i.e. almost no flow point can be used for regression at this time an index error will be raised in WVReg
+        except IndexError:
+            V_long, w, Error, final_V_long, final_w = em.f_extreme(op_Vl, op_w, Errors)
 
         op_Vl.append(V_long)
         op_w.append(w)

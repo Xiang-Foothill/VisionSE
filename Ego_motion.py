@@ -96,6 +96,27 @@ def pre_filter(good_old, flow, h, f, op_Vl, op_w):
 
     return good_old[filter_mask], flow[filter_mask]
 
+def f_extreme(op_Vl, op_w, Errors):
+    """function be called when the regression failed, this typically happened in extreme conditions, for example, the ground is completely smooth and there is no feature to track at all, or the environment is completely dark
+    key idea: again, apply past information as a backup source for information at this emergency situation"""
+
+    print("""Egomotion Estimation Regression FAILED !!!!!!!!!!!! f_extreme called""")
+    past_steps = 10
+    past_len = len(op_Vl)
+    if past_len == 0:
+        print("f_extreme called when no past information available")
+        return 0, 0, 0, 0, 0
+    past_steps = min(past_len, past_steps)
+
+    past_amplifier = 1.2
+    past_Vls, past_Ws, past_Errors = op_Vl[- past_steps : ], op_w[-past_steps : ], Errors[- past_steps : ]
+
+    # now take the average of past measurements and past errors
+    past_Vl, past_w, past_Error = np.average(past_Vls), np.average(past_Ws), np.average(past_Errors)
+    past_Error *= past_amplifier
+
+    return past_Vl, past_w, past_Error, past_Vl, past_w
+
 def test():
     start_frame = 0
     images, real_V, real_Omega, f, h, deltaT = du.parse_barc_data(Omega_exist=True)

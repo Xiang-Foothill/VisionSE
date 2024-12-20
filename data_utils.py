@@ -11,6 +11,7 @@ CHESS_STRAIGHT = "carlaData3.pkl"
 CHESS_STRAIGHT2 = "chessStraight2.pkl"
 CHESS_STRAIGHT3 = "chessStraight3.pkl"
 CHESS_CIRCLE = "ChessCircle.pkl"
+LADDER1 = "ladder1.pkl"
 BARC_H = 0.123 # the height of the camera from the horizontal graound 
 BARC_F = 605.5 # focal length in terms of pixels - [pixels]
 BARC_T = 0.1
@@ -63,7 +64,7 @@ def parse_barc_data(dataset_path = CHESS_STRAIGHT2, Omega_exist = False) -> Tupl
         else:
             return images, np.linalg.norm(states[:, :2], axis=1), BARC_F, BARC_H, BARC_T
 
-def full_parse(dataset_path = CHESS_STRAIGHT2) -> Tuple[np.ndarray, np.ndarray]:
+def full_parse(dataset_path = LADDER1) -> Tuple[np.ndarray, np.ndarray]:
     """the order of parameters returned:
     images, V_tran, V_long, w, f, h, deltaT"""
     cur_path = os.getcwd()
