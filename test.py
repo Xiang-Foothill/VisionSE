@@ -28,8 +28,8 @@ Before the prefilter: {good_old.shape[0]}""")
         try:
           V_long, w, Error = em.WVReg(good_old, flow, h, f) # use egomotion estimation function to estimate the ego motion
           # apply optimization algorithms here
-          final_V_long = em.Kalman_filter(op_Vl, Errors, V_long, Error)
-          final_w = em.Kalman_filter(op_w, Errors, w, Error)
+          final_V_long = em.past_fusion(op_Vl, Errors, V_long, Error)
+          final_w = em.past_fusion(op_w, Errors, w, Error)
 
           # sometimes there might be some extreme conditions that make regression failed, i.e. almost no flow point can be used for regression at this time an index error will be raised in WVReg
         except IndexError:
@@ -52,10 +52,10 @@ Before the prefilter: {good_old.shape[0]}""")
     # ax1.plot(real_Vt[start_frame : end_frame], label = "real_V_tran")
     # ax1.plot(op_Vt, label = "op_V_tran")
     ax2.plot(real_Vl[start_frame : end_frame], label = "real_V_long")
-    # ax2.plot(op_Vl, label = "op_V_long")
+    ax2.plot(op_Vl, label = "op_V_long")
     ax2.plot(est_Vl, label = "est_V_long")
     ax3.plot(real_w[start_frame : end_frame], label = "real_w")
-    # ax3.plot(op_w, label = "op_w")
+    ax3.plot(op_w, label = "op_w")
     ax3.plot(est_w, label = "est_w")
     ax1.legend()
     ax2.legend()

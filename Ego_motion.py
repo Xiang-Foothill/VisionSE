@@ -25,9 +25,12 @@ def WVReg(good_old, flow, h, f):
     V_long_Y, w_Y, Error_Y = res_Y[0][0], - res_Y[0][1], res_Y[1][0]
 
     V_long, w, error = (V_long_X + V_long_Y) / 2, (w_X + w_Y) / 2, (Error_X + Error_Y) / 2
+
+    print(f"average of root-squared error as Vx percetnage is: { ((error / good_old.shape[0]) ** 0.5) / np.average(Vx) }")
+
     return  V_long, w, error
 
-def Kalman_filter(op_Xs, op_errors, cur_X, error):
+def past_fusion(op_Xs, op_errors, cur_X, error):
     """key idea:
     the velocities of the car wouldn't change too much in a very short time, so the past velocities are somehow informative for our estimation of the current velocity
     combine our current estimation of the car's velocity with our knowledge of it's past velocity
@@ -131,7 +134,8 @@ def f_a2vl(al, deltaT, Vl0):
         imu_vl[i, ] = cur_vl
         pre_al = al[i, ]
         pre_vl = cur_vl
-
+    
+    print(f"the percentage error in acceleration measurement is {1.2 / np.median(al)}")
     return imu_vl
 
 def median_filter(Xs, threshold = 50):
