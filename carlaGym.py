@@ -30,30 +30,45 @@ def spawn_vehicle(world):
 
     # attach a rgb camera to the vehicle
     cam = blueprint_library.find("sensor.camera.rgb")
-
+    imu = blueprint_library.find("sensor.other.imu")
     IM_W = 640
     IM_H = 480
     T = 0.04
+    imu_acc_noise_x = 1.2 # standard deviation parameter for the imu's x-direction noise measurement
+    imu_acc_noise_y = 1.0 # standard deviation parameter for the imu's y-direction noise measurement
+    imu_agu_noise_z = 0.3 # standard deviation parameter for the imu's angular velocity noise measurement
 
     cam.set_attribute("image_size_x", f"{IM_W}")
     cam.set_attribute("image_size_y", f"{IM_H}")
     cam.set_attribute('sensor_tick', f"{T}")
+    imu.set_attribute("sensor_tick", f"{T}")
+    imu.set_attribute("noise_accel_stddev_x", f"{imu_acc_noise_x}")
+    imu.set_attribute("noise_accel_stddev_y", f"{imu_acc_noise_y}")
+    imu.set_attribute("noise_gyro_stddev_z", f"{imu_agu_noise_z}")
+    imu.set_attribute("noise_seed", f"{0}")
+
     sensor_height = 1.2
     cam_2_v = carla.Transform(carla.Location(x = 2.9, z = sensor_height))
-    sensor = world.spawn_actor(cam, cam_2_v, attach_to = ego)
-    
+    imu_2_v = carla.Transform(carla.Location(x = 0.0, y = 0.0, z = 0.0))
+    rgb_sensor = world.spawn_actor(cam, cam_2_v, attach_to = ego)
+    imu_sensor = world.spawn_actor(imu, imu_2_v, attach_to = ego)
+
     world.actor_list.append(ego)
-    world.actor_list.append(sensor)
+    world.actor_list.append(rgb_sensor)
+    world.actor_list.append(imu_sensor)
 
     world.data["F"] = findFocal(cam)
     world.data["sensor_height"] = sensor_height
 
     world.data["T"] = T
     if world.mode == "data":
-        f_recall = make_data_recall(world)
+        rgb_recall = make_data_recall(world)
+        imu_recall = make_imu_data_recall(world)
+        rgb_sensor.listen(rgb_recall)
+        imu_sensor.listen(imu_recall)
     else:
         f_recall = make_exp_recall(world)
-    sensor.listen(f_recall)
+        rgb_sensor.listen(f_recall)
 
     return ego
 
@@ -84,11 +99,23 @@ def make_data_recall(world):
 
         ego = world.actor_list[0]
         V = ego.get_velocity()
+
         omega = np.deg2rad(ego.get_angular_velocity().z)
         V_x, V_y = V.x, V.y
         states.append(np.asarray([V_x, V_y, omega]))
-
     return data_recall
+
+def make_imu_data_recall(world):
+    """generate the data_recall function applied when the imu sensor is listening"""
+    def imu_data_recall(imuMeasurement):
+        imu_data = world.data["imu"]
+        acceleration_raw = imuMeasurement.accelerometer
+        angular_raw = imuMeasurement.gyroscope
+        al = acceleration_raw.x
+        w = angular_raw.z
+        imu_data.append(np.asarray([al, w]))
+    
+    return imu_data_recall
 
 def make_exp_recall(world):
     """make the recall function used for real-time experiment
@@ -132,6 +159,7 @@ def make_exp_recall(world):
 def prepareData(world):
     world.data["images"] = []
     world.data["states"] = []
+    world.data["imu"] = []
 
 def clear_world(world):
     for actor in world.actor_list:
@@ -178,9 +206,14 @@ def play_game(mode):
     world = client.get_world()
     world.actor_list = []
     world.mode = mode
-    client.set_timeout(10.0)\
+    client.set_timeout(10.0)
     
     world.data = {}
+    if world.mode == "data":
+        prepareData(world)
+    if world.mode == "realTime":
+        prepareExp(world)
+    
     ego = spawn_vehicle(world)
      # set the world to the synchronous mode
     settings = world.get_settings()
@@ -188,10 +221,6 @@ def play_game(mode):
     settings.fixed_delta_seconds = world.data["T"] # !!!! Note: to avoid the error of carla simulation, try to set the sensor_tick time as the same value as the world_tick time
     world.apply_settings(settings)
 
-    if world.mode == "data":
-        prepareData(world)
-    if world.mode == "realTime":
-        prepareExp(world)
     set_spectator(world)
 
     # To start a basic agent
@@ -209,7 +238,7 @@ def play_game(mode):
     if world.mode == "data":
         cur_path = os.getcwd()
         SE_root = os.path.dirname(cur_path)
-        path_to_save =  SE_root + "/VideoSet/" + "chessStraight2.pkl"
+        path_to_save =  SE_root + "/VideoSet/" + "ladder2.pkl"
         saveData(world.data, path_to_save)
 
     if world.mode == "realTime":

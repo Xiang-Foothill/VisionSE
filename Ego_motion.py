@@ -65,11 +65,10 @@ def pre_filter(good_old, flow, h, f, op_Vl, op_w):
     past_steps = 5  # the length of the horizon of how long we want to look back
     past_len = len(op_Vl)
 
-    if past_len == 0:
+    if past_len <= 10:
         return good_old, flow # if we are at the very start, this function is not applicable, return good_old, and flow directly
     
     # obtain past information
-    past_steps = min(past_len, past_steps)
     past_Vl, past_w = np.average(op_Vl[- past_steps : ]), np.average(op_w[- past_steps : ])
     pre_VW = np.asarray([[past_Vl], [past_w]])
 
@@ -117,6 +116,36 @@ def f_extreme(op_Vl, op_w, Errors):
 
     return past_Vl, past_w, past_Error, past_Vl, past_w
 
+def f_a2vl(al, deltaT, Vl0):
+    """apply accumulative operation to transform an acceleration time series into its correpsonding linear velocity time series
+    @ a: a time series array with dimention (N, 2) [ax, xy]
+    @ deltaT: the time interval between two adjacent index
+    Vxy0: initial velocity in the x-direction and y-direction [Vx, Vy]"""
+    al = median_filter(al)
+    imu_vl = np.zeros(shape = (al.shape[0]))
+    pre_vl = Vl0
+    pre_al = 0
+
+    for i in range(al.shape[0]):
+        cur_vl = pre_vl + deltaT * pre_al
+        imu_vl[i, ] = cur_vl
+        pre_al = al[i, ]
+        pre_vl = cur_vl
+
+    return imu_vl
+
+def median_filter(Xs, threshold = 50):
+    """note that sometimes, the imu sensors will sometimes give some noisy measurements that are hundreds of times out of the normal range of meansurements, which is catastrophic for our accumulative measurements
+    filter out these values in axy by applying median_value_filter
+    @ threshold: how many times can the measured values exceed the median value, replace these obvious outliers with the average acceleration in the most recent ten steps"""
+    x_median = np.median(Xs)
+    replace_steps = 10
+    for i in range(Xs.shape[0]):
+        if abs(Xs[i]) > abs(x_median * threshold):
+            x_replace = np.average(Xs[max(0, i - replace_steps) : i])
+            Xs[i] = x_replace
+    
+    return Xs
 def test():
     start_frame = 0
     images, real_V, real_Omega, f, h, deltaT = du.parse_barc_data(Omega_exist=True)

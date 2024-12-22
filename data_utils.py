@@ -12,6 +12,7 @@ CHESS_STRAIGHT2 = "chessStraight2.pkl"
 CHESS_STRAIGHT3 = "chessStraight3.pkl"
 CHESS_CIRCLE = "ChessCircle.pkl"
 LADDER1 = "ladder1.pkl"
+LADDER2 = "ladder2.pkl"
 BARC_H = 0.123 # the height of the camera from the horizontal graound 
 BARC_F = 605.5 # focal length in terms of pixels - [pixels]
 BARC_T = 0.1
@@ -81,15 +82,30 @@ def full_parse(dataset_path = LADDER1) -> Tuple[np.ndarray, np.ndarray]:
     else:
         return images, np.linalg.norm(states[:, :2], axis=1), states[:, 1], states[:, 2], BARC_F, BARC_H, BARC_T
 
+def imu_parse(dataset_path = LADDER2):
+    """this function only parses data from the imu sensor"""
+    cur_path = os.getcwd()
+    SE_root = os.path.dirname(cur_path)
+    dataset_path = SE_root + "/VideoSet/" + dataset_path
+    data = np.load(dataset_path, allow_pickle=True)
+
+    imu_data = data["imu"]
+    imu_data = np.asarray(imu_data)
+    return imu_data
+
 def to_cvChannels(img):
     """convert the RGB image from the numpy format to the cv2 format
     cv2 format: [N, height, width, channels]
     numpy format:[N, channels, height, wdith]"""
+    if img.shape[3] == 3: # first check it is already in the form of cv2. If it is return it directly
+        return np.uint8(img)
+    
     N, h, w = img.shape[0], img.shape[2], img.shape[3]
     cv2_img = np.zeros(shape = (N, h, w, 3))
     cv2_img[:, :, :, 0] = img[:, 2, :, :]
     cv2_img[:, :, :, 1] = img[:, 1, :, :]
     cv2_img[:, :, :, 2] = img[:, 0, :, :]
+
     return np.uint8(cv2_img)
 
 def to_npChannels(img):

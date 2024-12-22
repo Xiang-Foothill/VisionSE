@@ -4,13 +4,14 @@ import OP_utils as pu
 import Ego_motion as em
 import matplotlib.pyplot as plt
 
-def raw_test():
+def rgb_test():
+    """this test only involves the perception of optical flow optical no measurement from imu is included"""
     images, real_Vl, real_w, f, h, deltaT = du.full_parse()
     op_Vt, op_Vl, op_w = [], [], [] # all values estiamted by pure optical flow
     est_Vt, est_Vl, est_w = [], [], [] # values that are optimized by Kalman filter and other algorithms
     Errors = [] # record the errors of past estimations
-    start_frame = 20
-    end_frame = 400
+    start_frame = 10
+    end_frame = 200
 
     for i in range(start_frame, end_frame):
         preImg, nextImg = images[i], images[i + 1]
@@ -61,8 +62,30 @@ Before the prefilter: {good_old.shape[0]}""")
     ax3.legend()
     plt.show()
 
+def imu_test():
+    """this function only tests the performance of imu sensor with regarding to the real sesnor"""
+    images, real_Vl, real_w, f, h, deltaT = du.full_parse()
+    imu_data = du.imu_parse()
+
+    start_frame = 10
+    Vl0 = real_Vl[0]
+    end_frame = 400
+
+    imu_w = imu_data[start_frame : end_frame, 1]
+    imu_al = imu_data[start_frame : end_frame, 0]
+
+    imu_vl = em.f_a2vl(imu_al, deltaT, Vl0)[start_frame : end_frame]
+    f, (ax1, ax2) = plt.subplots(1, 2)
+    ax1.plot(real_Vl[start_frame : end_frame], label = "real_Vl")
+    ax1.plot(imu_vl, label = "imu_vl")
+    ax2.plot(real_w[start_frame : end_frame], label = "real_w")
+    ax2.plot(imu_w, label = "imu_w")
+    ax1.legend()
+    ax2.legend()
+    plt.show()
+
 def main():
-    raw_test()
+    rgb_test()
 
 if __name__ == "__main__":
     main()
