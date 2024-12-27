@@ -21,14 +21,44 @@ def WVReg(good_old, flow, h, f):
     res_X = np.linalg.lstsq(X_data, Vx)
     res_Y = np.linalg.lstsq(Y_data, Vy)
 
-    V_long_X, w_X, Error_X = res_X[0][0], - res_X[0][1], res_X[1][0] # we should have a negative sign for the angular velocity because our model takes downward as positive y-direction
-    V_long_Y, w_Y, Error_Y = res_Y[0][0], - res_Y[0][1], res_Y[1][0]
+    V_long_X, w_X, resid_X = res_X[0][0], - res_X[0][1], res_X[1][0] # we should have a negative sign for the angular velocity because our model takes downward as positive y-direction
+    V_long_Y, w_Y, resid_Y = res_Y[0][0], - res_Y[0][1], res_Y[1][0]
+
+    Error_X, Error_Y = resid_X, resid_Y
 
     V_long, w, error = (V_long_X + V_long_Y) / 2, (w_X + w_Y) / 2, (Error_X + Error_Y) / 2
 
-    print(f"average of root-squared error as Vx percetnage is: { ((error / good_old.shape[0]) ** 0.5) / np.average(Vx) }")
-
     return  V_long, w, error
+
+def noise_est(real_X, est_X):
+    """an average noise estimator that measures the noise existed in est_X
+    @real_X: the real value of X
+    @est_X: the measured value of X"""
+    dist = real_X - est_X
+    return np.average(np.abs(dist))
+
+def simple_fusion(measure1, measure2, error1, error2):
+    """a simple fusion function that combines measurements from two sensors without any iterated process"""
+    gain = error1 / (error1 + error2)
+    return (1 - gain) * measure1 + gain * measure2
+
+def Kalman_filter(prediction, measurement, pred_noise, mea_error, error_history):
+    """simple kalman filter that combines a 1-dimension prediction and a one dimension measurement
+    @return:
+    an estimation that combines the prediction value and the measurement value"""
+    if not len(error_history):
+        pre_error = 0
+    else:
+        pre_error = error_history[-1]
+    
+    pred_error = pred_noise + pre_error
+    Kalman_gain = pred_error / (pred_error + mea_error)
+    final = (1 - Kalman_gain) * prediction + Kalman_gain * measurement
+    new_error = pred_error - Kalman_gain * pred_error
+
+    error_history.append(new_error)
+
+    return final
 
 def past_fusion(op_Xs, op_errors, cur_X, error):
     """key idea:
@@ -98,7 +128,43 @@ def pre_filter(good_old, flow, h, f, op_Vl, op_w):
 
     return good_old[filter_mask], flow[filter_mask]
 
-def f_extreme(op_Vl, op_w, Errors):
+def imu_filter(good_old, flow, h, f, vl_imu, w_imu):
+    """key idea:
+    similar to the pre_filter function above which relies on the history records to remove outliers from the regression data points,
+    this function uses the available information of estimated vl and w given by imu to remove the outliers"""
+    discard_threshold = 10.0
+    imu_VW = np.asarray([[vl_imu], [w_imu]])
+    Vx, Vy, x, y = flow[:, 0], flow[:, 1], good_old[:, 0], good_old[:, 1]
+
+    # prepare the data points matrix
+    X_tran_data = - y / h
+    X_long_data = x * y / (f * h)
+    X_w_data = f + x ** 2 / f
+    Y_long_data = y ** 2 / (f * h)
+    Y_w_data = (x * y) / f
+
+    X_tran_data, X_long_data, X_w_data = X_tran_data.reshape(X_tran_data.shape[0], 1), X_long_data.reshape(X_long_data.shape[0], 1), X_w_data.reshape(X_w_data.shape[0], 1)
+    Y_long_data, Y_w_data = Y_long_data.reshape(Y_long_data.shape[0], 1), Y_w_data.reshape(Y_w_data.shape[0], 1)
+    X_data = np.concatenate((X_long_data, X_w_data), axis = 1)
+    Y_data = np.concatenate((Y_long_data, Y_w_data), axis = 1)
+
+    # use past information to give an approximation about Vx and Vy
+    Vx, Vy = Vx.reshape(Vx.shape[0], 1), Vy.reshape(Vy.shape[0], 1)
+    pre_Vx, pre_Vy = np.matmul(X_data, imu_VW), np.matmul(Y_data, imu_VW)
+    prefactors = np.abs((Vx - pre_Vx) / pre_Vx ) + np.abs((Vy - pre_Vy) / pre_Vy)
+    filter_mask = prefactors <= discard_threshold
+    filter_mask = filter_mask.reshape(filter_mask.shape[0])
+
+    return good_old[filter_mask], flow[filter_mask]
+
+
+def imu_extreme(vl_imu, w_imu, errors, vl_imu_noise):
+    """a helper function that deals with the situation when the past regression process for optical flow fails"""
+    print("Regression Failed!!!!! Extreme function called")
+    errors.append(errors[-1] + vl_imu_noise)
+    return vl_imu, w_imu, vl_imu, w_imu
+
+def past_extreme(op_Vl, op_w, Errors):
     """function be called when the regression failed, this typically happened in extreme conditions, for example, the ground is completely smooth and there is no feature to track at all, or the environment is completely dark
     key idea: again, apply past information as a backup source for information at this emergency situation"""
 
@@ -119,7 +185,7 @@ def f_extreme(op_Vl, op_w, Errors):
 
     return past_Vl, past_w, past_Error, past_Vl, past_w
 
-def f_a2vl(al, deltaT, Vl0):
+def f_as2vls(al, deltaT, Vl0):
     """apply accumulative operation to transform an acceleration time series into its correpsonding linear velocity time series
     @ a: a time series array with dimention (N, 2) [ax, xy]
     @ deltaT: the time interval between two adjacent index
@@ -138,6 +204,22 @@ def f_a2vl(al, deltaT, Vl0):
     print(f"the percentage error in acceleration measurement is {1.2 / np.median(al)}")
     return imu_vl
 
+def f_a2vl(al, deltaT, est_vl):
+    """predict the longitudinal velocity of the car at the next time step, given the linear acceleration estimated by imu, and the estimation of linear velocity at the last time step
+    Different from the f_as2vls function above, this function only provides estimation at a single time step, instead of a whole time series
+    input:
+    est_vl: the history of estimated longitudinal velocity
+    return:
+    @ vl: the estimated longitudinal velocity at the next time step"""
+    if not len(est_vl): # the case when we do not have any previous estimation of longitudinal speed, which makes prediction by linear acceleration impossible
+        return 0, 10 ** 6
+    vl0 = est_vl[-1]
+    
+    imu_vl_std = 0.12
+    vl = vl0 + deltaT * al # estimation by linear acceleration model
+    vl_noise = deltaT * imu_vl_std
+    return vl, vl_noise
+
 def median_filter(Xs, threshold = 50):
     """note that sometimes, the imu sensors will sometimes give some noisy measurements that are hundreds of times out of the normal range of meansurements, which is catastrophic for our accumulative measurements
     filter out these values in axy by applying median_value_filter
@@ -150,6 +232,7 @@ def median_filter(Xs, threshold = 50):
             Xs[i] = x_replace
     
     return Xs
+
 def test():
     start_frame = 0
     images, real_V, real_Omega, f, h, deltaT = du.parse_barc_data(Omega_exist=True)
