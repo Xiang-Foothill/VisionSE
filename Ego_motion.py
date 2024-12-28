@@ -24,9 +24,10 @@ def WVReg(good_old, flow, h, f):
     V_long_X, w_X, resid_X = res_X[0][0], - res_X[0][1], res_X[1][0] # we should have a negative sign for the angular velocity because our model takes downward as positive y-direction
     V_long_Y, w_Y, resid_Y = res_Y[0][0], - res_Y[0][1], res_Y[1][0]
 
-    Error_X, Error_Y = resid_X, resid_Y
+    V_long, w, resid = (V_long_X + V_long_Y) / 2, (w_X + w_Y) / 2, (resid_X + resid_Y) / 2
 
-    V_long, w, error = (V_long_X + V_long_Y) / 2, (w_X + w_Y) / 2, (Error_X + Error_Y) / 2
+    # measure the average deviation of the data points from the regression line, such deviation turns out to be a very effective measure to evaluate the quality of ego-motion estimation from optical flow
+    error = ((resid / good_old.shape[0])) ** 0.5
 
     return  V_long, w, error
 
@@ -36,6 +37,24 @@ def noise_est(real_X, est_X):
     @est_X: the measured value of X"""
     dist = real_X - est_X
     return np.average(np.abs(dist))
+
+def f_vlNoise(error):
+    """a discrete function used to estimate the noise of the result given by WVReg
+    @ error: the sauare root of average residuals of the regression result given by WVReg
+    such error is very implicative about how good the estimation is
+    Good estimation(low noise): error <= 20
+    Moderate esimation(some noise): error <= 50
+    bad estimation(high noise): error <= 500
+    horrible estimation(extremeley noisy): error > 500"""
+    low_noise, mid_noise, high_noise, extreme_noise = 0.1, 1.5, 5.0, 10.0
+    if error <= 10.0:
+        return low_noise
+    elif error <= 20:
+        return mid_noise
+    elif error <= 100:
+        return high_noise
+    else:
+        return extreme_noise
 
 def simple_fusion(measure1, measure2, error1, error2):
     """a simple fusion function that combines measurements from two sensors without any iterated process"""
@@ -86,23 +105,23 @@ def past_fusion(op_Xs, op_errors, cur_X, error):
     res_X = cur_X + Kalman_gain * (past_X - cur_X)
     return res_X
 
-def pre_filter(good_old, flow, h, f, op_Vl, op_w):
+def pre_filter(good_old, good_new, flow, h, f, op_Vl, op_w):
     """key idea:
     use the information from past time (op_Vl, op_w) to filter out obvious outliers in the data, since the velocities of the car cannot change too much in very limited time
     for a point with Vx, Vy, and pre_Vx, pre_Vy
     its PREFACTOR = abs((Vx - pre_Vx) / pre_Vx ) + abs((Vy - pre_Vy) / pre_Vy)
 
     @ return: flow vector without obvious outliers"""
-    discard_threshold = 3.0 # the threshold for discard a point, if a point's preFactor is higher than this threshold, discard it
+    discard_threshold = 5.0 # the threshold for discard a point, if a point's preFactor is higher than this threshold, discard it
 
     past_steps = 5  # the length of the horizon of how long we want to look back
     past_len = len(op_Vl)
 
     if past_len <= 10:
-        return good_old, flow # if we are at the very start, this function is not applicable, return good_old, and flow directly
+        return good_old, good_new, flow # if we are at the very start, this function is not applicable, return good_old, and flow directly
     
     # obtain past information
-    past_Vl, past_w = np.average(op_Vl[- past_steps : ]), np.average(op_w[- past_steps : ])
+    past_Vl, past_w = np.median(op_Vl[- past_steps : ]), np.median(op_w[- past_steps : ])
     pre_VW = np.asarray([[past_Vl], [past_w]])
 
     Vx, Vy, x, y = flow[:, 0], flow[:, 1], good_old[:, 0], good_old[:, 1]
@@ -126,13 +145,13 @@ def pre_filter(good_old, flow, h, f, op_Vl, op_w):
     filter_mask = prefactors <= discard_threshold
     filter_mask = filter_mask.reshape(filter_mask.shape[0])
 
-    return good_old[filter_mask], flow[filter_mask]
+    return good_old[filter_mask], good_new[filter_mask], flow[filter_mask]
 
-def imu_filter(good_old, flow, h, f, vl_imu, w_imu):
+def imu_filter(good_old, good_new, flow, h, f, vl_imu, w_imu):
     """key idea:
     similar to the pre_filter function above which relies on the history records to remove outliers from the regression data points,
     this function uses the available information of estimated vl and w given by imu to remove the outliers"""
-    discard_threshold = 10.0
+    discard_threshold = 4.0
     imu_VW = np.asarray([[vl_imu], [w_imu]])
     Vx, Vy, x, y = flow[:, 0], flow[:, 1], good_old[:, 0], good_old[:, 1]
 
@@ -155,7 +174,7 @@ def imu_filter(good_old, flow, h, f, vl_imu, w_imu):
     filter_mask = prefactors <= discard_threshold
     filter_mask = filter_mask.reshape(filter_mask.shape[0])
 
-    return good_old[filter_mask], flow[filter_mask]
+    return good_old[filter_mask], good_new[filter_mask], flow[filter_mask]
 
 
 def imu_extreme(vl_imu, w_imu, errors, vl_imu_noise):

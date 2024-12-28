@@ -3,6 +3,7 @@ import data_utils as du
 import OP_utils as pu
 import Ego_motion as em
 import matplotlib.pyplot as plt
+import video_utils as vu
 
 def rgb_test():
     """this test only involves the perception of optical flow optical no measurement from imu is included"""
@@ -21,7 +22,7 @@ def rgb_test():
         print(f"""---- Inspecting the size of the data points of frame {i}--------
 Before the prefilter: {good_old.shape[0]}""")
         
-        good_old, flow = em.pre_filter(good_old, flow, h, f, op_Vl, op_w)
+        good_old, good_new, flow = em.pre_filter(good_old, good_new, flow, h, f, op_Vl, op_w)
 
         print(f"after pre_filter: {good_old.shape[0]}")
 
@@ -88,22 +89,20 @@ def imu_test():
     ax2.legend()
     plt.show()
 
-def full_test():
+def full_test(show_img = False):
     """test function for fused imu and rgb estimation"""
     images, real_Vl, real_w, f, h, deltaT = du.full_parse()
     imu_data = du.imu_parse()
 
     # the emperical measured value of noise
-    imu_vl_noise = 0.048
     imu_w_noise = 0.23
-    rgb_vl_noise = 0.6
     rgb_w_noise = 0.14
 
     op_Vt, op_Vl, op_w = [], [], [] # all values estiamted by pure optical flow
     est_Vt, est_Vl, est_w = [], [], [] # values that are optimized by Kalman filter and other algorithms
     vl_errors = [] # record the errors of past estimations
-    start_frame = 10
-    end_frame = 480
+    start_frame = 20
+    end_frame = 500
 
     for i in range(start_frame, end_frame):
         preImg, nextImg = images[i], images[i + 1]
@@ -112,13 +111,11 @@ def full_test():
         mask = pu.G_cutoff(preImg)
         good_old, good_new, flow = pu.cv_featureLK(preImg, nextImg, deltaT, mask)
 
-        print(f"""---- Inspecting the size of the data points of frame {i}--------
-Before the prefilter: {good_old.shape[0]}""")
-
         try:
           vl_imu, imu_vl_noise = em.f_a2vl(al_imu, deltaT, est_Vl)
-          good_old, flow = em.imu_filter(good_old, flow, h, f, vl_imu, w_imu)
-          vl_rgb, w_rgb, rgb_resid = em.WVReg(good_old, flow, h, f) # use egomotion estimation function to estimate the ego motion
+          good_old, good_new, flow = em.pre_filter(good_old, good_new, flow, h, f, op_Vl, op_w)
+          vl_rgb, w_rgb, error = em.WVReg(good_old, flow, h, f) # use egomotion estimation function to estimate the ego motion
+          rgb_vl_noise = em.f_vlNoise(error)
 
           vl_final = em.Kalman_filter(vl_imu, vl_rgb, imu_vl_noise, rgb_vl_noise, vl_errors)
           w_final = em.simple_fusion(w_rgb, w_imu, rgb_w_noise, imu_w_noise)
@@ -126,6 +123,14 @@ Before the prefilter: {good_old.shape[0]}""")
 
         except IndexError:
             vl_rgb, w_rgb, vl_final, w_final = em.imu_extreme(vl_imu, w_imu, vl_errors, imu_vl_noise)
+        
+        if show_img:
+            print(f"""///////////////////// at frame {i} ////////////////////
+                  op_V_long = {vl_rgb}, op_w = {w_rgb}, 
+                  est_V_long = {vl_final}, est_w = {w_final},
+                  real_V_long = {real_Vl[i]}, real_w = {real_w[i]}
+                  the average residuals of rgb is {error}""")
+            vu.drawFlow(preImg, good_old, good_new)
 
         op_Vl.append(vl_rgb)
         op_w.append(w_rgb)
@@ -133,8 +138,9 @@ Before the prefilter: {good_old.shape[0]}""")
         est_w.append(w_final)
 
         # have some printing imformation every 7 frames
-        if i % 7 == 0:
-            print(f"""///////////////////// at frame {i} ////////////////////
+        if not show_img:
+            if i % 7 == 0:
+                print(f"""///////////////////// at frame {i} ////////////////////
                   op_V_long = {vl_rgb}, op_w = {w_rgb}, 
                   est_V_long = {vl_final}, est_w = {w_final},
                   real_V_long = {real_Vl[i]}, real_w = {real_w[i]}""")
@@ -154,7 +160,7 @@ Before the prefilter: {good_old.shape[0]}""")
     plt.show()
 
 def main():
-    full_test()
+    full_test(show_img = False)
 
 if __name__ == "__main__":
     main()

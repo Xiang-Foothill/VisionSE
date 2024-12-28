@@ -41,7 +41,7 @@ def get_Trackpoints(img, ground_mask):
 
     # find the points with good features to be tracked
     feature_params = dict( maxCorners = 100,
-                       qualityLevel = 0.3,
+                       qualityLevel = 0.31,
                        minDistance = 7,
                        blockSize = 7)
     
