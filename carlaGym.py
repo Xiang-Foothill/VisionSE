@@ -34,7 +34,7 @@ def spawn_vehicle(world):
     IM_W = 640
     IM_H = 480
     T = 0.04
-    imu_acc_noise_x = 1.2 # standard deviation parameter for the imu's x-direction noise measurement
+    imu_acc_noise_x = 2.0 # standard deviation parameter for the imu's x-direction noise measurement
     imu_acc_noise_y = 1.0 # standard deviation parameter for the imu's y-direction noise measurement
     imu_agu_noise_z = 0.3 # standard deviation parameter for the imu's angular velocity noise measurement
 

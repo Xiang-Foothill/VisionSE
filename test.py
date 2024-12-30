@@ -144,15 +144,17 @@ def full_test(show_img = False):
                   op_V_long = {vl_rgb}, op_w = {w_rgb}, 
                   est_V_long = {vl_final}, est_w = {w_final},
                   real_V_long = {real_Vl[i]}, real_w = {real_w[i]}""")
+                
+    est_w = em.median_filter(est_w)
 
     f, (ax1, ax2, ax3) = plt.subplots(1, 3)
     # ax1.plot(real_Vt[start_frame : end_frame], label = "real_V_tran")
     # ax1.plot(op_Vt, label = "op_V_tran")
     ax2.plot(real_Vl[start_frame : end_frame], label = "real_V_long")
-    ax2.plot(op_Vl, label = "op_V_long")
+    # ax2.plot(op_Vl, label = "op_V_long")
     ax2.plot(est_Vl, label = "est_V_long")
     ax3.plot(real_w[start_frame : end_frame], label = "real_w")
-    ax3.plot(op_w, label = "op_w")
+    # ax3.plot(op_w, label = "op_w")
     ax3.plot(est_w, label = "est_w")
     ax1.legend()
     ax2.legend()
