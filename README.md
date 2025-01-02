@@ -7,6 +7,11 @@ environment. Such a task is quite meaningful, since it challenges the designer t
 # Problem Formulating
 Consider an ego-vehicle that moves on a flat road. Suppose that we have enough lightness in the environment to ensure a decent vision. A camera is attached to its front windshield, and the camera remains relatively still to the car. Since the road is relatively flat, we can assume that the optical axis is parallell to the ground. The camera samples images with a frequency around 24HZ. All the information we have is the image sequences, now we need to use the images to estimate the vheicle's **V_long**, and **w**. 
 
+# Packages used
+- Python 3.8.18
+- numpy 1.24.3
+- Opencv CV2, 4.10.0
+- Matplotlib 3.7.5
 
 # Methodology
 ## Optical flow and Lucas-Kanade Method
@@ -32,11 +37,13 @@ In the equation above, $U_x$ and $U_y$ are the x component and y-component of th
 By applying the Lucas-Kanade Method and its corresponding ideal assumption, we can now get the optical flow values for for a list of selected pixels at a given frame. However, all the optical values obtained here are quite noisy and may differ a lot from the real motion field values, for reasons like:
 - lack of diversity of pixel intensity gradients in the selected pixel's neighborhood
 - sudden change of color pattern in the environment
-- Low frequency of image sampling rate
+- Low frequency of image sampling rate  
 Denote the optical flow values obtained from Lucas-Kanade Method as ${{U_x}_i'}$ and ${{U_y}_i'}$, which differs from the real motion field values by some noisy terms $\delta_x$ and $\delta_y$.
 Now we can formulate two optimization problem in terms of least square:
 ![Optimization_formula](https://github.com/user-attachments/assets/9514b303-98a2-4515-bc8d-51fcf6dc092e)
 
+To better understand the optimization problem above, we can interpret it as a simple learning problem, where ${{U_x}_i'}$ and  ${{U_y}_i'}$ are the labels. Terms like, $\frac{x_iy_i}{fh}$,  $\frac{x_i^2}{f})$, $\frac{y_i^2}{fh}$, and $(f + \frac{x_iy_i}{f})$ are the data poitns corresponding to the labels, and $V_long$ and $w$ are the parameters of the function to be learned.  
+After finding the optimized values for ${V_long}_x$, $w_x$ (the values from the optimization problem of x-diretction motion field) and ${V_long}_y$, $w_y$ (the values from the optimiztation problem of y-direction motion field), we average the results from the two optimization problems to find the final answer.
 
 # Advantages of this algorithm
 - No need to any external assistance such as GPS
