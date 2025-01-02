@@ -89,10 +89,12 @@ After finding the optimized values for ${V_long}_x$, $w_x$ (the values from the 
 As we can see in the experiment result above, when the car is driving in a scenario with few good features to track, optical flow becomes very usntable. We can interpret such unstability as a kind of low-frequency noise with high magnitude(extreme driving scenario appears with a low frequency, but as long as such scenario apepars, optical flow will be totally out of work). In comparison, if we only rely IMU sensor to estimate the ego-motion, we will see some high-frequency noise with low-magnitude. Such opposite natures of noises in pure-vision estimations and imu estimations make them perfect complementary sensors, which can be fused together.  
 ![flow_chart](https://github.com/user-attachments/assets/a4cb30b9-9273-48d9-9f99-04afcf5f85e3)
 
-
-
 # Advantages of this algorithm
 - No need to any external assistance such as GPS
 - No need for any pre-knowledge about the driving scenario
 - No need for training with data
 - Absolute explainability. Unlike network or other data-driven methods that are more prevalent nowadays, the whole motion field model is completely explanable in the traditional computer-vision knowledge framework. Any defects or disadvantages of its performance can be tracked back to the theoretical level.
+
+### Contact
+All the descriptions above are a brief summation of the key ideas of my work. There are many details in the codes and tedious optimization functions used in this project. If you are Interested in the details of this project, feel free to email:  
+liu.yx@berkeley.edu
