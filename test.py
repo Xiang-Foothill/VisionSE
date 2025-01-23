@@ -61,8 +61,9 @@ Before the prefilter: {good_old.shape[0]}""")
 
           # sometimes there might be some extreme conditions that make regression failed, i.e. almost no flow point can be used for regression at this time an index error will be raised in WVReg
         except IndexError:
-            V_long, w, Error, final_V_long, final_w = em.past_extreme(op_Vl, op_w, Errors)
-        
+            V_long, w, Error = em.past_extreme(op_Vl, op_w, Errors)
+            final_V_long, final_w = V_long, w
+            
         if show_img:
             vu.drawFlow(preImg, good_old, good_new)
 
