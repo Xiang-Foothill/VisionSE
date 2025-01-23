@@ -46,7 +46,7 @@ def f_vlNoise(error):
     Moderate esimation(some noise): error <= 50
     bad estimation(high noise): error <= 500
     horrible estimation(extremeley noisy): error > 500"""
-    low_noise, mid_noise, high_noise, extreme_noise = 0.3, 3.0, 50.0, 300.0
+    low_noise, mid_noise, high_noise, extreme_noise = 0.1, 1.5, 5.0, 10.0
     if error <= 10.0:
         return low_noise
     elif error <= 20:
@@ -209,7 +209,7 @@ def f_as2vls(al, deltaT, Vl0):
     @ a: a time series array with dimention (N, 2) [ax, xy]
     @ deltaT: the time interval between two adjacent index
     Vxy0: initial velocity in the x-direction and y-direction [Vx, Vy]"""
-    al = median_remover(al)
+    al = median_filter(al)
     imu_vl = np.zeros(shape = (al.shape[0]))
     pre_vl = Vl0
     pre_al = 0
@@ -239,9 +239,9 @@ def f_a2vl(al, deltaT, est_vl):
     vl_noise = deltaT * imu_vl_std
     return vl, vl_noise
 
-def median_remover(Xs, threshold = 50):
+def median_filter(Xs, threshold = 50):
     """note that sometimes, the imu sensors will sometimes give some noisy measurements that are hundreds of times out of the normal range of meansurements, which is catastrophic for our accumulative measurements
-    filter out these values in axy
+    filter out these values in axy by applying median_value_filter
     @ threshold: how many times can the measured values exceed the median value, replace these obvious outliers with the average acceleration in the most recent ten steps"""
     x_median = np.median(Xs)
     replace_steps = 10
@@ -251,17 +251,6 @@ def median_remover(Xs, threshold = 50):
             Xs[i] = x_replace
     
     return Xs
-
-def median_filter(Xs, window_size = 20):
-    """a median filter for a one-dimensional array
-    replace the center of the sliding window with the median value of the whole sliding window
-    @ Xs: a python array (note that it is not a numpy array) representing the signal to be processed"""
-    new_Xs = np.zeros(shape=(len(Xs), ))
-
-    for i, x in enumerate(Xs):
-        new_Xs[i] = np.median(Xs[max(0, int(i - window_size / 2)) : min(len(Xs), int(i + window_size / 2))])
-    
-    return new_Xs
 
 def test():
     start_frame = 0
