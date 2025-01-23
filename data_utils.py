@@ -1,29 +1,73 @@
 from typing import Tuple
 import numpy as np
+from pathlib import Path
+import cv2
 from matplotlib import pyplot as plt
 import os
+BARC_PATH = "ParaDriveLocalComparison_Oct1_enc_0.npz"
+CARLA_PATH1 = "carlaData1.pkl"
+CARLA_PATH2 = "carlaData2.pkl"
+CHESS_STRAIGHT = "carlaData3.pkl"
+CHESS_STRAIGHT2 = "chessStraight2.pkl"
+CHESS_STRAIGHT3 = "chessStraight3.pkl"
+CHESS_CIRCLE = "ChessCircle.pkl"
+LADDER1 = "ladder1.pkl"
+LADDER2 = "ladder2.pkl"
+REAL1 = "real1.pkl"
 BARC_H = 0.123 # the height of the camera from the horizontal graound 
 BARC_F = 605.5 # focal length in terms of pixels - [pixels]
 BARC_T = 0.1
 
-"""DATA prase functions below
-the format of data in the data pacakges collected by the carla gym script:
-each data package is saved as a pkl file,
-Opening the file, what you will find is a dictionary with three keys: images, states, and imu (in the format of string)
-
-data["images"]: a length N array, where each element is a W*H size-image
-data["states"]: a length N array, where each element is an inner nested array of the form [V_x, V_y, w], which is [velocity at the x-direction, velocity at the y-direction, and angular velocity]
-data["imu"]: a length N array, where each element is an inner nested array of the form [a_long, w]. a_long is the measured linear acceleration in the longitudinal direction by the imu, and w is the measured angular velocity by the imu
-
-All three length-N arrays are time-series with the same time step, i.e. the ith image is collected as the same time as the ith state, and ith imu measurement.
-"""
-
-
-def full_parse(dataset_path) -> Tuple[np.ndarray, np.ndarray]:
+def parse_barc_data(dataset_path = CHESS_STRAIGHT2, Omega_exist = False) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Parse the data needed for the optical flow algorithm
+    @param dataset_path: Path to the dataset npz file. 
+    @param Omega_exist: if the values of angular velocities should be returned or not, if they need to be returned, return in the form: [Images, real_Vs, real_Omegas, F, h, T]
+    @return: (image, velocity)
+    """
+    cur_path = os.getcwd()
+    SE_root = os.path.dirname(cur_path)
+    dataset_path = SE_root + "/VideoSet/" + dataset_path
+    data = np.load(dataset_path, allow_pickle=True)
+    # {'images': (N, C, H, W), 
+    # 'sensors': (N, O), 
+    # 'states': (N, S),  # [v_long, v_tran, w_psi, x, y, psi] 
+    # 'actions': (N, A),  # expert action
+    # 'agent_actions': (N, A), 
+    # 'collection_actions': (N, A), 
+    # 'rews': (N, ), 
+    # 'dones': (N, )}
 
-    the order of parameters returned:
+    # In "ParaDriveLocalComparison_Sep7_0.npz", N=1019, C=3, H=360, W=640, O=6, S=6, A=2. 
+    # for key, value in data.items():
+    #     print(f"{key}: {value.shape}")
+
+    images, states = data['images'], data['states']
+
+    # fig, axes = plt.subplots(3, 3, figsize=(10, 10))
+    # for i, idx in enumerate(np.random.permutation(images.shape[0])[:9]):
+    #     ax = axes[i // 3][i % 3]
+    #     ax.imshow(np.moveaxis(images[idx], [0, 1, 2], [2, 0, 1]))
+    #     ax.set_title(f"#{idx}\t" + "$v_{long} = $" + f"{states[idx, 0]:.2f}")
+    # plt.show()
+
+    # return images, states[:, 0]  # longitudinal velocity mangnitude
+    images = np.asarray(images)
+    states = np.asarray(states)
+    images = to_cvChannels(images)
+
+    if Omega_exist:
+        if "F" in data:
+            return images, np.linalg.norm(states[:, :2], axis=1), states[:, 2], data["F"], data["sensor_height"], data["T"]  # velocity magnitude 
+        else:
+            return images, np.linalg.norm(states[:, :2], axis=1), states[:, 2], BARC_F, BARC_H, BARC_T
+    else:
+        if "F" in data:
+            return images, np.linalg.norm(states[:, :2], axis=1), data["F"], data["sensor_height"], data["T"]  # velocity magnitude 
+        else:
+            return images, np.linalg.norm(states[:, :2], axis=1), BARC_F, BARC_H, BARC_T
+
+def full_parse(dataset_path = REAL1) -> Tuple[np.ndarray, np.ndarray]:
+    """the order of parameters returned:
     images, V_tran, V_long, w, f, h, deltaT"""
     cur_path = os.getcwd()
     SE_root = os.path.dirname(cur_path)
@@ -39,7 +83,7 @@ def full_parse(dataset_path) -> Tuple[np.ndarray, np.ndarray]:
     else:
         return images, np.linalg.norm(states[:, :2], axis=1), states[:, 1], states[:, 2], BARC_F, BARC_H, BARC_T
 
-def imu_parse(dataset_path):
+def imu_parse(dataset_path = REAL1):
     """this function only parses data from the imu sensor"""
     cur_path = os.getcwd()
     SE_root = os.path.dirname(cur_path)
@@ -49,44 +93,6 @@ def imu_parse(dataset_path):
     imu_data = data["imu"]
     imu_data = np.asarray(imu_data)
     return imu_data
-
-def parse_barc_data(dataset_path, Omega_exist = False) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    This prase function is not reliable, PLEASE DO NOT USE IT.
-    @param dataset_path: Path to the dataset npz file. 
-    @param Omega_exist: if the values of angular velocities should be returned or not, if they need to be returned, return in the form: [Images, real_Vs, real_Omegas, F, h, T]
-    @return: (image, velocity)
-    """
-    cur_path = os.getcwd()
-    SE_root = os.path.dirname(cur_path)
-    dataset_path = SE_root + "/VideoSet/" + dataset_path
-    data = np.load(dataset_path, allow_pickle=True)
-
-    # {'images': (N, C, H, W), 
-    # 'sensors': (N, O), 
-    # 'states': (N, S),  # [v_long, v_tran, w_psi, x, y, psi] 
-    # 'actions': (N, A),  # expert action
-    # 'agent_actions': (N, A), 
-    # 'collection_actions': (N, A), 
-    # 'rews': (N, ), 
-    # 'dones': (N, )}
-
-    images, states = data['images'], data['states']
-
-    images = np.asarray(images)
-    states = np.asarray(states)
-    images = to_cvChannels(images)
-
-    if Omega_exist:
-        if "F" in data:
-            return images, np.linalg.norm(states[:, :2], axis=1), states[:, 2], data["F"], data["sensor_height"], data["T"]  # velocity magnitude 
-        else:
-            return images, np.linalg.norm(states[:, :2], axis=1), states[:, 2], BARC_F, BARC_H, BARC_T
-    else:
-        if "F" in data:
-            return images, np.linalg.norm(states[:, :2], axis=1), data["F"], data["sensor_height"], data["T"]  # velocity magnitude 
-        else:
-            return images, np.linalg.norm(states[:, :2], axis=1), BARC_F, BARC_H, BARC_T
 
 def to_cvChannels(img):
     """convert the RGB image from the numpy format to the cv2 format
@@ -141,3 +147,6 @@ def random_image_test(images):
     im = images[np.random.randint(low = 0, high = images.shape[0])]
     imgplot = plt.imshow(im[1, :, :])
     plt.show()
+
+# if __name__ == '__main__':
+#     parse_barc_data(Path.cwd() / 'ParaDriveLocalComparison_Sep7_0.npz')
