@@ -5,12 +5,74 @@ import sys
 import data_utils as du
 import pickle
 import os
-import OP_flow
+import op_development
 
 sys.path.insert(0,'C:/carla/PythonAPI/carla') 
 # To import a basic agent
 from agents.navigation.basic_agent import BasicAgent
 from agents.navigation.constant_velocity_agent import ConstantVelocityAgent
+
+"""This is a data-collection script for carla simulation
+The format of data collected is exactly the same as the data format described in the data_utils file, which can be directly used in the test.py script
+
+To use this script to collect data for your own carla map:
+- create a folder that is parallel to the whole source folder(the folder in which you save the files for thhis git-repo), and name such folder as "VideoSet"
+- launch carla on your pc
+- in the main function at the bottom of this script, please call the play_game function and specify paremters
+@ save_path: the name of the file, 
+@ package_size: how many frames you want your data packages to have"""
+
+def play_game(mode = "data", save_path = "ladder2.pkl", package_size = 500):
+    # prepare the world and the client
+    client = carla.Client('localhost', 2000)
+    world = client.get_world()
+    world.actor_list = []
+    world.mode = mode
+    client.set_timeout(10.0)
+    
+    world.data = {}
+    if world.mode == "data":
+        prepareData(world)
+    if world.mode == "realTime":
+        prepareExp(world)
+    
+    ego = spawn_vehicle(world)
+     # set the world to the synchronous mode
+    settings = world.get_settings()
+    settings.synchronous_mode = True
+    settings.fixed_delta_seconds = world.data["T"] # !!!! Note: to avoid the error of carla simulation, try to set the sensor_tick time as the same value as the world_tick time
+    world.apply_settings(settings)
+
+    set_spectator(world)
+
+    # To start a basic agent
+    agent = BasicAgent(ego)
+
+    while True:
+        ego.apply_control(agent.run_step())
+        updata_spectator(world)
+        world.tick()
+
+        if judge_end(world, package_size):
+            break
+    
+    clear_world(world)
+    if world.mode == "data":
+        cur_path = os.getcwd()
+        SE_root = os.path.dirname(cur_path)
+        path_to_save =  SE_root + "/VideoSet/" + save_path
+        saveData(world.data, path_to_save)
+
+    if world.mode == "realTime":
+        # now plot the data
+        realVs = world.data["realV"]
+        opVs = world.data["opV"]
+        plt.plot(realVs, label = "realV")
+        # plt.plot(opVs, label = "opV")
+        plt.plot(world.data["V_std"], label = "V_std")
+        plt.plot(world.data["filtered_V"], label = "filtered_V")
+        plt.legend()
+        plt.show()
 
 def set_spectator(world):
     """move the spectator to a high position right above the whole map"""
@@ -142,7 +204,7 @@ def make_exp_recall(world):
             params["preImg"] = IM_array
         else:
             params["nextImg"] = IM_array
-            opV, W, preV, preW, preVE, preWE, filtered_V = OP_flow.full_estimator(**params)
+            opV, W, preV, preW, preVE, preWE, filtered_V = op_development.full_estimator(**params)
             params["preV"] = preV
             params["preW"] = preW
             params["preVE"] = preVE
@@ -167,8 +229,8 @@ def clear_world(world):
     # world.data["states"] = np.asarray(world.data["states"])
     # world.data["images"] = np.asarray(world.data["images"])
 
-def judge_end(world):
-    upper_ticks = 500 # maximum number of ticks allowed for this experiment
+def judge_end(world, upper_ticks):
+
     if world.mode == "realTime":
         judge_array = world.data["realV"]
     elif world.mode == "data":
@@ -199,59 +261,6 @@ def prepareExp(world):
     mode = "onlyV",
     plot_tool = world.plot,
     with_std = False)
-
-def play_game(mode):
-    # prepare the world and the client
-    client = carla.Client('localhost', 2000)
-    world = client.get_world()
-    world.actor_list = []
-    world.mode = mode
-    client.set_timeout(10.0)
-    
-    world.data = {}
-    if world.mode == "data":
-        prepareData(world)
-    if world.mode == "realTime":
-        prepareExp(world)
-    
-    ego = spawn_vehicle(world)
-     # set the world to the synchronous mode
-    settings = world.get_settings()
-    settings.synchronous_mode = True
-    settings.fixed_delta_seconds = world.data["T"] # !!!! Note: to avoid the error of carla simulation, try to set the sensor_tick time as the same value as the world_tick time
-    world.apply_settings(settings)
-
-    set_spectator(world)
-
-    # To start a basic agent
-    agent = BasicAgent(ego)
-
-    while True:
-        ego.apply_control(agent.run_step())
-        updata_spectator(world)
-        world.tick()
-
-        if judge_end(world):
-            break
-    
-    clear_world(world)
-    if world.mode == "data":
-        cur_path = os.getcwd()
-        SE_root = os.path.dirname(cur_path)
-        path_to_save =  SE_root + "/VideoSet/" + "ladder2.pkl"
-        saveData(world.data, path_to_save)
-
-    if world.mode == "realTime":
-        # now plot the data
-        realVs = world.data["realV"]
-        opVs = world.data["opV"]
-        plt.plot(realVs, label = "realV")
-        # plt.plot(opVs, label = "opV")
-        plt.plot(world.data["V_std"], label = "V_std")
-        plt.plot(world.data["filtered_V"], label = "filtered_V")
-        plt.legend()
-        plt.show()
-    # du.random_image_test(world.data["images"])
 
 def saveData(data, path):
     with open(path, "wb") as file:

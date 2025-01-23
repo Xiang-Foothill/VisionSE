@@ -202,7 +202,7 @@ def past_extreme(op_Vl, op_w, Errors):
     past_Vl, past_w, past_Error = np.average(past_Vls), np.average(past_Ws), np.average(past_Errors)
     past_Error *= past_amplifier
 
-    return past_Vl, past_w, past_Error, past_Vl, past_w
+    return past_Vl, past_w, past_Error
 
 def f_as2vls(al, deltaT, Vl0):
     """apply accumulative operation to transform an acceleration time series into its correpsonding linear velocity time series

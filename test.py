@@ -5,14 +5,41 @@ import Ego_motion as em
 import matplotlib.pyplot as plt
 import video_utils as vu
 
-def rgb_test():
+# the summationon of names of packages used
+BARC_PATH = "ParaDriveLocalComparison_Oct1_enc_0.npz"
+CARLA_PATH1 = "carlaData1.pkl"
+CARLA_PATH2 = "carlaData2.pkl"
+CHESS_STRAIGHT = "carlaData3.pkl"
+CHESS_STRAIGHT2 = "chessStraight2.pkl"
+CHESS_STRAIGHT3 = "chessStraight3.pkl"
+CHESS_CIRCLE = "ChessCircle.pkl"
+LADDER1 = "ladder1.pkl"
+LADDER2 = "ladder2.pkl"
+REAL1 = "real1.pkl"
+
+
+"""to replicate the experiment, download the data packages from the google drive
+the following packages are recommended to be used to see how the diversity of pixel intensity affects the performance of optical-flow measurement
+
+CHESS_STRAIGHT3: the packages collected in the most ideal road scenario in which the road is paved with chessboard texture, i.e. there are ample pixel points which have enough changes in the intensity of the gradients in its neighborhood. In such a scenario, optical flow works the best.
+LADDER2: a relatively ideal road scenario data package, in which we can still see a great amount of good features to track.
+REAL1: the packges collected in the most realistic road scenario in which road markings and signs appear randomly at a low frequency, i.e. most of the time, optical flow won't work quite well
+
+We have three test functions
+rgb_test: the test function that only tests the performance of optical flow measurement
+imu_test: the test function that only uses the measurements of imu to estimate the ego-motion
+full_test: a test function that fuses the estimations from both imu and optical measurements
+
+for rgb_test and full_test, we have a paramenter, show_img:
+    if show_img is true, the test function will draw the image at the correpsonding frame and stops there until a key is pressed to make the estimation for the next frame
+    if show_img is false, the test function will show no image, it will keep making estimations and compare the real values and the estimations in the end"""
+
+def rgb_test(Path = CHESS_STRAIGHT3, start_frame = 10, end_frame = 500, show_img = False):
     """this test only involves the perception of optical flow optical no measurement from imu is included"""
-    images, real_Vl, real_w, f, h, deltaT = du.full_parse()
+    images, real_Vl, real_w, f, h, deltaT = du.full_parse(Path)
     op_Vt, op_Vl, op_w = [], [], [] # all values estiamted by pure optical flow
     est_Vt, est_Vl, est_w = [], [], [] # values that are optimized by Kalman filter and other algorithms
     Errors = [] # record the errors of past estimations
-    start_frame = 10
-    end_frame = 200
 
     for i in range(start_frame, end_frame):
         preImg, nextImg = images[i], images[i + 1]
@@ -34,7 +61,12 @@ Before the prefilter: {good_old.shape[0]}""")
 
           # sometimes there might be some extreme conditions that make regression failed, i.e. almost no flow point can be used for regression at this time an index error will be raised in WVReg
         except IndexError:
-            V_long, w, Error, final_V_long, final_w = em.past_extreme(op_Vl, op_w, Errors)
+            V_long, w, Error = em.past_extreme(op_Vl, op_w, Errors)
+            final_V_long, final_w = V_long, w
+            
+        if show_img:
+            vu.drawFlow(preImg, good_old, good_new)
+
 
         op_Vl.append(V_long)
         op_w.append(w)
@@ -56,24 +88,26 @@ Before the prefilter: {good_old.shape[0]}""")
     # ax1.plot(real_Vt[start_frame : end_frame], label = "real_V_tran")
     # ax1.plot(op_Vt, label = "op_V_tran")
     ax2.plot(real_Vl[start_frame : end_frame], label = "real_V_long")
-    ax2.plot(op_Vl, label = "op_V_long")
+    ax2.set_xlabel("frame number")
+    ax2.set_ylabel("V_long (m / s)")
+    # ax2.plot(op_Vl, label = "op_V_long")
     ax2.plot(est_Vl, label = "est_V_long")
     ax3.plot(real_w[start_frame : end_frame], label = "real_w")
-    ax3.plot(op_w, label = "op_w")
+    # ax3.plot(op_w, label = "op_w")
     ax3.plot(est_w, label = "est_w")
+    ax3.set_xlabel("frame number")
+    ax3.set_ylabel("w (rad / s)")
     ax1.legend()
     ax2.legend()
     ax3.legend()
     plt.show()
 
-def imu_test():
+def imu_test(start_frame = 10, end_frame = 200, Path = REAL1):
     """this function only tests the performance of imu sensor with regarding to the real sesnor"""
-    images, real_Vl, real_w, f, h, deltaT = du.full_parse()
-    imu_data = du.imu_parse()
+    images, real_Vl, real_w, f, h, deltaT = du.full_parse(Path)
+    imu_data = du.imu_parse(Path)
 
-    start_frame = 10
-    Vl0 = real_Vl[0]
-    end_frame = 500
+    Vl0 = real_Vl[start_frame]
 
     imu_w = imu_data[start_frame : end_frame, 1]
     imu_al = imu_data[start_frame : end_frame, 0]
@@ -82,17 +116,21 @@ def imu_test():
     f, (ax1, ax2) = plt.subplots(1, 2)
     ax1.plot(real_Vl[start_frame : end_frame], label = "real_Vl")
     ax1.plot(imu_vl, label = "imu_vl")
+    ax1.set_xlabel("frame number")
+    ax1.set_ylabel("V_long (m / s)")
     ax2.plot(real_w[start_frame : end_frame], label = "real_w")
     ax2.plot(imu_w, label = "imu_w")
+    ax2.set_xlabel("frame number")
+    ax2.set_ylabel("w (rad / s)")
     print(f"the average noise that existed in imu measurement of w is {em.noise_est(real_w[start_frame : end_frame], imu_w)}")
     ax1.legend()
     ax2.legend()
     plt.show()
 
-def full_test(show_img = False):
+def full_test(Path = REAL1, start_frame = 10, end_frame = 500, show_img = False):
     """test function for fused imu and rgb estimation"""
-    images, real_Vl, real_w, f, h, deltaT = du.full_parse()
-    imu_data = du.imu_parse()
+    images, real_Vl, real_w, f, h, deltaT = du.full_parse(Path)
+    imu_data = du.imu_parse(Path)
 
     # the emperical measured value of noise
     imu_w_noise = 0.23
@@ -101,8 +139,6 @@ def full_test(show_img = False):
     op_Vt, op_Vl, op_w = [], [], [] # all values estiamted by pure optical flow
     est_Vt, est_Vl, est_w = [], [], [] # values that are optimized by Kalman filter and other algorithms
     vl_errors = [] # record the errors of past estimations
-    start_frame = 20
-    end_frame = 500
 
     for i in range(start_frame, end_frame):
         preImg, nextImg = images[i], images[i + 1]
@@ -153,16 +189,20 @@ def full_test(show_img = False):
     ax2.plot(real_Vl[start_frame : end_frame], label = "real_V_long")
     # ax2.plot(op_Vl, label = "op_V_long")
     ax2.plot(est_Vl, label = "est_V_long")
+    ax2.set_xlabel("frame number")
+    ax2.set_ylabel("V_long (m / s)")
     ax3.plot(real_w[start_frame : end_frame], label = "real_w")
     # ax3.plot(op_w, label = "op_w")
     ax3.plot(est_w, label = "est_w")
+    ax3.set_xlabel("frame number")
+    ax3.set_ylabel("w (rad / s)")
     ax1.legend()
     ax2.legend()
     ax3.legend()
     plt.show()
 
 def main():
-    full_test(show_img = False)
+    full_test(REAL1, show_img=False, start_frame = 20)
 
 if __name__ == "__main__":
     main()
