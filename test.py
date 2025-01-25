@@ -4,6 +4,7 @@ import OP_utils as pu
 import Ego_motion as em
 import matplotlib.pyplot as plt
 import video_utils as vu
+import Estimators
 
 # the summationon of names of packages used
 BARC_PATH = "ParaDriveLocalComparison_Oct1_enc_0.npz"
@@ -34,6 +35,36 @@ for rgb_test and full_test, we have a paramenter, show_img:
     if show_img is true, the test function will draw the image at the correpsonding frame and stops there until a key is pressed to make the estimation for the next frame
     if show_img is false, the test function will show no image, it will keep making estimations and compare the real values and the estimations in the end"""
 
+def estimator_test(Path = REAL1, start_frame = 10, end_frame = 500, show_img = False):
+    images, real_Vl, real_w, f, h, deltaT = du.full_parse(Path)
+    estimator = Estimators.OP_estimator(deltaT, h, f, images[start_frame])
+    est_Vls, est_ws, est_errors = [], [], []
+    for i in range(start_frame + 1, end_frame):
+        nextImg = images[i]
+        est_Vl, est_w, cur_error = estimator.estimate_dev(nextImg)
+        est_Vls.append(est_Vl)
+        est_ws.append(est_w)
+        est_errors.append(cur_error)
+
+    # est_Vls = em.median_filter(est_Vls)
+    # est_ws = em.median_filter(est_ws)
+
+    f, (ax1, ax2, ax3) = plt.subplots(1, 3)
+    ax1.plot(real_Vl[start_frame : end_frame], label = "real_Vl")
+    ax1.plot(est_Vls, label = "est_vl")
+    ax1.set_xlabel("frame number")
+    ax1.set_ylabel("V_long (m / s)")
+    ax2.plot(real_w[start_frame : end_frame], label = "real_w")
+    ax2.plot(est_ws, label = "est_w")
+    ax2.set_xlabel("frame number")
+    ax2.set_ylabel("w (rad / s)")
+    ax3.plot(est_errors, label = "error estimated")
+
+    ax1.legend()
+    ax2.legend()
+    ax3.legend()
+    plt.show()
+
 def rgb_test(Path = CHESS_STRAIGHT3, start_frame = 10, end_frame = 500, show_img = False):
     """this test only involves the perception of optical flow optical no measurement from imu is included"""
     images, real_Vl, real_w, f, h, deltaT = du.full_parse(Path)
@@ -61,8 +92,8 @@ Before the prefilter: {good_old.shape[0]}""")
 
           # sometimes there might be some extreme conditions that make regression failed, i.e. almost no flow point can be used for regression at this time an index error will be raised in WVReg
         except IndexError:
-            V_long, w, Error, final_V_long, final_w = em.past_extreme(op_Vl, op_w, Errors)
-        
+            V_long, w, Error = em.past_extreme(op_Vl, op_w, Errors)
+            final_V_long, final_w = V_long, w
         if show_img:
             vu.drawFlow(preImg, good_old, good_new)
 
@@ -201,7 +232,7 @@ def full_test(Path = REAL1, start_frame = 10, end_frame = 500, show_img = False)
     plt.show()
 
 def main():
-    full_test(REAL1, show_img=False, start_frame = 20)
+    estimator_test()
 
 if __name__ == "__main__":
     main()

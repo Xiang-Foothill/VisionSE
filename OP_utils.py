@@ -5,7 +5,7 @@ import video_utils as vu
 import data_utils as du
 
 # This function calculates the optical flow of points selected by cv2.goodFeature 
-def cv_featureLK(preImg, nextImg, deltaT, mask):
+def cv_featureLK(preImg, nextImg, deltaT, mask, with_error = False):
     """apply the openCV built-in function cv.calcOpticalFlowPyrLK and good to implement Lukas-Kanade 
     Method to calculate the optical-flow between two consecutive frames
     1. find all coordinates of the points with good features to be tracked
@@ -29,12 +29,16 @@ def cv_featureLK(preImg, nextImg, deltaT, mask):
     if p1 is not None:
         good_new = p1[st == 1]
         good_old = p0[st == 1]
-    
+        errors = err[st == 1]
+
     good_old, good_new = downRecenter(good_old), downRecenter(good_new)
     flow = (good_new - good_old) / deltaT
 
-    return good_old, good_new, flow
-
+    if not with_error:
+        return good_old, good_new, flow
+    if with_error:
+        return good_old, good_new, flow, errors
+    
 def get_Trackpoints(img, ground_mask):
     # specify the function used to detect the ground
     # f_ground = G_cutoff

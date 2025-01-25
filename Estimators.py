@@ -8,58 +8,25 @@ import video_utils as vu
 class OP_estimator:
     """estimator class for optical flow estimation"""
 
-    def __init__(self, deltaT, h, f, start_image = None):
+    def __init__(self, deltaT, h, f, pre_filter_size = 5, pre_filter_discard = 3.0, past_fusion_on = True, past_fusion_size = 10.0, past_fusion_amplifier = 1.5, start_image = None):
 
         self.f = f
         self.h = h
         self.deltaT = deltaT
         self.preImg = start_image
+        self.pre_filter_size = pre_filter_size
+        self.pre_filter_discard = pre_filter_discard
+        self.past_fusion_on = past_fusion_on
+        self.past_fusion_size = past_fusion_size
+        self.past_fusion_amplifier = past_fusion_amplifier
 
         # the recording arrays for the estimation
         self.raw_opW = []
         self.raw_opVl = []
-        self.filter_opW = []
-        self.filter_opVl = []
         self.raw_Errors = []
-        self.filter_Errors = []
     
     def setPreImg(self, preImg):
         self.preImg = preImg
-
-    def estimate(self, nextImg):
-        if self.preImg is None:
-            print("""Error: the preImage is none and estimation failed !!!!!! At least two images are needed for the ego-motion estimation through optical flow
-                  please refer to the funciton setPreImg to solve this bug""")
-            return
-        
-        mask = pu.G_cutoff(self.preImg)
-
-        good_old_raw, good_new_raw, flow_raw = pu.cv_featureLK(self.preImg, nextImg, self.deltaT, mask)
-        good_old_filter, good_new_filer, flow_filter = em.pre_filter(good_old_raw, good_new_raw, flow_raw, self.h, self.f, self.filter_opVl, self.filter_opW)
-        print(good_old_filter.shape)
-        try:
-        #   V_long_raw, w_raw, Error_raw = em.WVReg(good_old_raw, flow_raw, self.h, self.f) # use egomotion estimation function to estimate the ego motion
-          V_long_filter, w_filter, Error_filter = em.WVReg(good_old_filter, flow_filter, self.h, self.f) # use egomotion estimation function to estimate the ego motion
-
-          # apply optimization algorithms here
-          V_long_final = em.past_fusion(self.filter_opVl, self.filter_Errors, V_long_filter, Error_filter)
-          w_final = em.past_fusion(self.filter_opW, self.filter_Errors, w_filter, Error_filter)
-
-          # sometimes there might be some extreme conditions that make regression failed, i.e. almost no flow point can be used for regression at this time an index error will be raised in WVReg
-        except IndexError:
-            V_long_raw, w_raw, Error_raw = em.past_extreme(self.filter_opVl, self.filter_opW, self.filter_Errors)
-            V_long_final, w_final, Error_filter = V_long_raw, w_raw, Error_raw
-        
-        # self.raw_opW.append(w_raw)
-        # self.raw_opVl.append(V_long_raw)
-        self.filter_opW.append(w_final)
-        self.filter_opVl.append(V_long_final)
-        # self.raw_Errors.append(Error_raw)
-        self.filter_Errors.append(Error_filter)
-
-        self.preImg = nextImg
-        
-        return V_long_final, w_final
     
     def estimate_copy(self, nextImg):
         preImg = self.preImg
@@ -108,37 +75,38 @@ class OP_estimator:
         raw_Vls = self.raw_opVl
         raw_ws = self.raw_opW
         raw_Errors = self.raw_Errors
-        est_Errors = self.filter_Errors
-        est_Vls = self.filter_opVl
-        est_ws = self.filter_opW
-
-        mask = pu.G_cutoff(preImg)
-        good_old, good_new, flow = pu.cv_featureLK(preImg, nextImg, deltaT, mask)
-        raw_Vl, raw_w, raw_Error = em.WVReg(good_old, flow, h, f)
-
-        good_old, good_new, flow = em.pre_filter(good_old, good_new, flow, h, f, raw_Vls, raw_ws)
-        
-        raw_Vls.append(raw_Vl)
-        raw_ws.append(raw_w)
-        raw_Errors.append(raw_Error)
-        
-        print(f"after pre_filter: {good_old.shape[0]}")
 
         try:
-          V_long, w, Error = em.WVReg(good_old, flow, h, f) # use egomotion estimation function to estimate the ego motion
-          # apply optimization algorithms here
-          final_V_long = em.past_fusion(raw_Vls, raw_Errors, V_long, Error)
-          final_w = em.past_fusion(raw_ws, raw_Errors, w, Error)
+          mask = pu.G_cutoff(preImg) # cut the ground out of the whole image
+          good_old, good_new, flow, raw_op_errors = pu.cv_featureLK(preImg, nextImg, deltaT, mask, with_error = True)
 
-          # sometimes there might be some extreme conditions that make regression failed, i.e. almost no flow point can be used for regression at this time an index error will be raised in WVReg
+          raw_Vl, raw_w, raw_resid = em.WVReg(good_old, flow, h, f) # first regression without any filter
+          raw_Error = np.average(raw_op_errors)
+
+          filter_res = em.pre_filter(good_old, good_new, flow, raw_op_errors, h, f, raw_Vls, raw_ws, self.pre_filter_size, self.pre_filter_discard) # use pre measurements without any filtering operation to filter out outliers
+          good_old, good_new, flow, op_errors = filter_res[0], filter_res[1], filter_res[2], filter_res[3]
+          V_long, w, resid = em.WVReg(good_old, flow, h, f) # use egomotion estimation function to estimate the ego motion
+          Error = np.average(op_errors)
+
+          if self.past_fusion_on:
+              final_V_long, final_error = em.past_fusion(raw_Vls, raw_Errors, V_long, Error, past_amplifier= self.past_fusion_amplifier, past_steps=self.past_fusion_size)
+              final_w, final_error = em.past_fusion(raw_ws, raw_Errors, w, Error)
+
+        # sometimes there might be some extreme conditions that make regression failed, i.e. almost no flow point can be used for regression at this time an index error will be raised in WVReg
         except IndexError:
-            V_long, w, Error = em.past_extreme(raw_Vls, raw_ws, raw_Errors)
-            final_V_long, final_w = V_long, w
+            final_V_long, final_w, final_error = em.past_extreme(raw_Vls, raw_ws, raw_Errors)
         
-        est_Vls.append(final_V_long)
-        est_ws.append(final_w)
-        est_Errors.append(Error)
+        # sometimes even the regression for the first unfiltered regression may fail, which makes raw_Vl, raw_w, and raw_Error not defined
+        try:
+            raw_Vls.append(raw_Vl)
+            raw_ws.append(raw_w)
+            raw_Errors.append(raw_Error)
+
+        except UnboundLocalError:
+            raw_Vls.append(final_V_long)
+            raw_ws.append(final_w)
+            raw_Errors.append(final_error)
 
         self.preImg = nextImg
 
-        return final_V_long, final_w
+        return final_V_long, final_w, final_error

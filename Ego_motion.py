@@ -29,7 +29,7 @@ def WVReg(good_old, flow, h, f):
     # measure the average deviation of the data points from the regression line, such deviation turns out to be a very effective measure to evaluate the quality of ego-motion estimation from optical flow
     error = ((resid / good_old.shape[0])) ** 0.5
 
-    return  V_long, w, error
+    return  V_long, w, resid
 
 def noise_est(real_X, est_X):
     """an average noise estimator that measures the noise existed in est_X
@@ -79,7 +79,7 @@ def Kalman_filter(prediction, measurement, pred_noise, mea_error, error_history)
 
     return final
 
-def past_fusion(op_Xs, op_errors, cur_X, error):
+def past_fusion(op_Xs, op_errors, cur_X, error, past_amplifier = 1.5, past_steps = 15):
     """key idea:
     the velocities of the car wouldn't change too much in a very short time, so the past velocities are somehow informative for our estimation of the current velocity
     combine our current estimation of the car's velocity with our knowledge of it's past velocity
@@ -87,38 +87,40 @@ def past_fusion(op_Xs, op_errors, cur_X, error):
     @ op_errors: the errors in the past history
     @ cur_X: our current estimation
     @ error: the error of our current estimation"""
-    past_amplifier = 1.0 # past informations may have some errors regarding the current time no matter what, amplify the error given by the past time measurement by this factor
-    past_steps = 5 # the number of past steps that we want to consider
+    past_amplifier = past_amplifier # past informations may have some errors regarding the current time no matter what, amplify the error given by the past time measurement by this factor
+    past_steps = past_steps # the number of past steps that we want to consider
     past_len = len(op_Xs)
 
     if past_len == 0:
-        return cur_X # if we are at the very first step, return the original estimation directly, there is no way to use past information for estimation
+        return cur_X, error # if we are at the very first step, return the original estimation directly, there is no way to use past information for estimation
     
     past_steps = min(past_steps, past_len)
     past_Xs, past_Errors = op_Xs[- past_steps : ], op_errors[- past_steps : ]
 
     # now take the average of past measurements and past errors
-    past_X, past_Error = np.average(past_Xs), np.average(past_Errors)
+    median_index = np.argsort(past_Xs)[len(past_Xs)//2]
+    past_X, past_Error = past_Xs[median_index], past_Errors[median_index]
     past_Error *= past_amplifier
 
     Kalman_gain = error / (error + past_Error)
     res_X = cur_X + Kalman_gain * (past_X - cur_X)
-    return res_X
+    new_error = error - Kalman_gain * error
+    return res_X, new_error
 
-def pre_filter(good_old, good_new, flow, h, f, op_Vl, op_w):
+def pre_filter(good_old, good_new, flow, errors, h, f, op_Vl, op_w, pre_filter_size = 5, pre_filter_discard = 3.0):
     """key idea:
     use the information from past time (op_Vl, op_w) to filter out obvious outliers in the data, since the velocities of the car cannot change too much in very limited time
     for a point with Vx, Vy, and pre_Vx, pre_Vy
     its PREFACTOR = abs((Vx - pre_Vx) / pre_Vx ) + abs((Vy - pre_Vy) / pre_Vy)
 
     @ return: flow vector without obvious outliers"""
-    discard_threshold = 5.0 # the threshold for discard a point, if a point's preFactor is higher than this threshold, discard it
+    discard_threshold = pre_filter_discard # the threshold for discard a point, if a point's preFactor is higher than this threshold, discard it
 
-    past_steps = 5  # the length of the horizon of how long we want to look back
+    past_steps = pre_filter_size  # the length of the horizon of how long we want to look back
     past_len = len(op_Vl)
 
     if past_len <= 10:
-        return good_old, good_new, flow # if we are at the very start, this function is not applicable, return good_old, and flow directly
+        return good_old, good_new, flow, errors # if we are at the very start, this function is not applicable, return good_old, and flow directly
     
     # obtain past information
     past_Vl, past_w = np.median(op_Vl[- past_steps : ]), np.median(op_w[- past_steps : ])
@@ -145,7 +147,7 @@ def pre_filter(good_old, good_new, flow, h, f, op_Vl, op_w):
     filter_mask = prefactors <= discard_threshold
     filter_mask = filter_mask.reshape(filter_mask.shape[0])
 
-    return good_old[filter_mask], good_new[filter_mask], flow[filter_mask]
+    return good_old[filter_mask], good_new[filter_mask], flow[filter_mask], errors[filter_mask]
 
 def imu_filter(good_old, good_new, flow, h, f, vl_imu, w_imu):
     """key idea:
@@ -202,14 +204,14 @@ def past_extreme(op_Vl, op_w, Errors):
     past_Vl, past_w, past_Error = np.average(past_Vls), np.average(past_Ws), np.average(past_Errors)
     past_Error *= past_amplifier
 
-    return past_Vl, past_w, past_Error, past_Vl, past_w
+    return past_Vl, past_w, past_Error
 
 def f_as2vls(al, deltaT, Vl0):
     """apply accumulative operation to transform an acceleration time series into its correpsonding linear velocity time series
     @ a: a time series array with dimention (N, 2) [ax, xy]
     @ deltaT: the time interval between two adjacent index
     Vxy0: initial velocity in the x-direction and y-direction [Vx, Vy]"""
-    al = median_filter(al)
+    al = imu_outlier_remove(al)
     imu_vl = np.zeros(shape = (al.shape[0]))
     pre_vl = Vl0
     pre_al = 0
@@ -239,7 +241,7 @@ def f_a2vl(al, deltaT, est_vl):
     vl_noise = deltaT * imu_vl_std
     return vl, vl_noise
 
-def median_filter(Xs, threshold = 50):
+def imu_outlier_remove(Xs, threshold = 50):
     """note that sometimes, the imu sensors will sometimes give some noisy measurements that are hundreds of times out of the normal range of meansurements, which is catastrophic for our accumulative measurements
     filter out these values in axy by applying median_value_filter
     @ threshold: how many times can the measured values exceed the median value, replace these obvious outliers with the average acceleration in the most recent ten steps"""
@@ -251,6 +253,29 @@ def median_filter(Xs, threshold = 50):
             Xs[i] = x_replace
     
     return Xs
+
+def median_filter(Xs, window_size = 5):
+    """a classic one-dimension median filter that replaces the ith value in Xs with the median value of all the values in the sliding window with window_size"""
+    for i in range(len(Xs)):
+        Xs[i] = np.median(Xs[max(0, i - int(window_size / 2)) : min(len(Xs), i + int(window_size / 2))])
+    return Xs
+
+def f_bad2median(V_long, w, Error, raw_Vls, raw_ws, raw_Errors, past_len = 5, V_long_threshold = 10.0, w_threshold = 1.5):
+    """sometimes, the optical flow method provides very bad measurement for ego_motion.
+    We can apply the information from the past to tell if such estimation is an extremely bad measurement.
+    if difference between the current measurement and the median value of previous measurements of window size past_len is larger than discard_threshold, then we define such a measurement as a very bad measurement"""
+    last_index = max(0, len(raw_Vls) - past_len)
+    V_long_median = np.median(raw_Vls[last_index : ])
+    w_median = np.median(raw_ws[last_index : ])
+    if abs(V_long - V_long_median):
+        V_long = V_long_median
+        Error *= 0.8
+    if abs(w - w_median):
+        w = w_median
+        Error *= 0.8
+    
+    return V_long, w, Error
+    
 
 def test():
     start_frame = 0
