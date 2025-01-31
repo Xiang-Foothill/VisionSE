@@ -28,46 +28,7 @@ class OP_estimator:
     def setPreImg(self, preImg):
         self.preImg = preImg
     
-    def estimate_copy(self, nextImg):
-        preImg = self.preImg
-        deltaT = self.deltaT
-        h = self.h
-        f = self.f
-        op_Vl = self.raw_opVl
-        op_w = self.raw_opW
-        Errors = self.filter_Errors
-        est_Vl = self.filter_opVl
-        est_w = self.filter_opW
-
-        mask = pu.G_cutoff(preImg)
-        good_old, good_new, flow = pu.cv_featureLK(preImg, nextImg, deltaT, mask)
-
-        good_old, good_new, flow = em.pre_filter(good_old, good_new, flow, h, f, op_Vl, op_w)
-
-        print(f"after pre_filter: {good_old.shape[0]}")
-
-        try:
-          V_long, w, Error = em.WVReg(good_old, flow, h, f) # use egomotion estimation function to estimate the ego motion
-          # apply optimization algorithms here
-          final_V_long = V_long
-          final_w = em.past_fusion(op_w, Errors, w, Error)
-
-          # sometimes there might be some extreme conditions that make regression failed, i.e. almost no flow point can be used for regression at this time an index error will be raised in WVReg
-        except IndexError:
-            V_long, w, Error = em.past_extreme(op_Vl, op_w, Errors)
-            final_V_long, final_w = V_long, w
-        
-        op_Vl.append(V_long)
-        op_w.append(w)
-        est_Vl.append(final_V_long)
-        est_w.append(final_w)
-        Errors.append(Error)
-
-        self.preImg = nextImg
-
-        return final_V_long, final_w
-    
-    def estimate_dev(self, nextImg):
+    def estimate(self, nextImg):
         preImg = self.preImg
         deltaT = self.deltaT
         h = self.h
@@ -81,16 +42,17 @@ class OP_estimator:
           good_old, good_new, flow, raw_op_errors = pu.cv_featureLK(preImg, nextImg, deltaT, mask, with_error = True)
 
           raw_Vl, raw_w, raw_resid = em.WVReg(good_old, flow, h, f) # first regression without any filter
-          raw_Error = np.average(raw_op_errors)
+          raw_Error = np.average(raw_op_errors) # calculate the error of estimation without prefiltering
 
           filter_res = em.pre_filter(good_old, good_new, flow, raw_op_errors, h, f, raw_Vls, raw_ws, self.pre_filter_size, self.pre_filter_discard) # use pre measurements without any filtering operation to filter out outliers
           good_old, good_new, flow, op_errors = filter_res[0], filter_res[1], filter_res[2], filter_res[3]
           V_long, w, resid = em.WVReg(good_old, flow, h, f) # use egomotion estimation function to estimate the ego motion
-          Error = np.average(op_errors)
+          Error = np.average(op_errors) # calculate the error of estimation with filtering
 
-          if self.past_fusion_on:
-              final_V_long, final_error = em.past_fusion(raw_Vls, raw_Errors, V_long, Error, past_amplifier= self.past_fusion_amplifier, past_steps=self.past_fusion_size)
-              final_w, final_error = em.past_fusion(raw_ws, raw_Errors, w, Error)
+          if self.past_fusion_on: # if the user chooses to apply fast fusion, call the fast fusion function
+              final_V_long, final_w, final_error = em.past_fusion(raw_Vls, raw_ws, raw_Errors, V_long, w, Error, past_amplifier= self.past_fusion_amplifier, past_steps=self.past_fusion_size)
+          else:
+              final_V_long, final_w, final_error = V_long, w, Error
 
         # sometimes there might be some extreme conditions that make regression failed, i.e. almost no flow point can be used for regression at this time an index error will be raised in WVReg
         except IndexError:
@@ -109,4 +71,9 @@ class OP_estimator:
 
         self.preImg = nextImg
 
+        # to optimize space use, only keep the latest measurements of raw_Vls, raw_ws, and raw_Errors
+        keep_size = int(max(self.past_fusion_size, self.pre_filter_size)) + 5
+        if len(raw_Vls) > keep_size:
+            raw_Vls, raw_ws, raw_Errors = raw_Vls[- keep_size : ], raw_ws[- keep_size : ], raw_Errors[- keep_size : ]
+            
         return final_V_long, final_w, final_error

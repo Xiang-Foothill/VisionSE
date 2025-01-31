@@ -79,7 +79,7 @@ def Kalman_filter(prediction, measurement, pred_noise, mea_error, error_history)
 
     return final
 
-def past_fusion(op_Xs, op_errors, cur_X, error, past_amplifier = 1.5, past_steps = 15):
+def past_fusion(op_Vls, op_Ws, op_errors, cur_Vl, cur_w, error, past_amplifier = 1.5, past_steps = 15):
     """key idea:
     the velocities of the car wouldn't change too much in a very short time, so the past velocities are somehow informative for our estimation of the current velocity
     combine our current estimation of the car's velocity with our knowledge of it's past velocity
@@ -89,23 +89,24 @@ def past_fusion(op_Xs, op_errors, cur_X, error, past_amplifier = 1.5, past_steps
     @ error: the error of our current estimation"""
     past_amplifier = past_amplifier # past informations may have some errors regarding the current time no matter what, amplify the error given by the past time measurement by this factor
     past_steps = past_steps # the number of past steps that we want to consider
-    past_len = len(op_Xs)
+    past_len = len(op_Vls)
 
     if past_len == 0:
-        return cur_X, error # if we are at the very first step, return the original estimation directly, there is no way to use past information for estimation
+        return cur_Vl, cur_w, error # if we are at the very first step, return the original estimation directly, there is no way to use past information for estimation
     
-    past_steps = min(past_steps, past_len)
-    past_Xs, past_Errors = op_Xs[- past_steps : ], op_errors[- past_steps : ]
+    past_steps = int(min(past_steps, past_len))
+    past_Vls, past_ws, past_Errors = op_Vls[- past_steps : ], op_Ws[- past_steps : ], op_errors[- past_steps : ]
 
     # now take the average of past measurements and past errors
-    median_index = np.argsort(past_Xs)[len(past_Xs)//2]
-    past_X, past_Error = past_Xs[median_index], past_Errors[median_index]
+    median_index = np.argsort(past_Vls)[len(past_Vls)//2]
+    past_Vl, past_w, past_Error = past_Vls[median_index], past_ws[median_index], past_Errors[median_index]
     past_Error *= past_amplifier
 
     Kalman_gain = error / (error + past_Error)
-    res_X = cur_X + Kalman_gain * (past_X - cur_X)
+    res_Vl = cur_Vl + Kalman_gain * (past_Vl - cur_Vl)
+    res_w = cur_w + Kalman_gain * (past_w - cur_w)
     new_error = error - Kalman_gain * error
-    return res_X, new_error
+    return res_Vl, res_w, new_error
 
 def pre_filter(good_old, good_new, flow, errors, h, f, op_Vl, op_w, pre_filter_size = 5, pre_filter_discard = 3.0):
     """key idea:
@@ -254,11 +255,12 @@ def imu_outlier_remove(Xs, threshold = 50):
     
     return Xs
 
-def median_filter(Xs, window_size = 5):
+def median_filter(Xs, window_size = 10):
     """a classic one-dimension median filter that replaces the ith value in Xs with the median value of all the values in the sliding window with window_size"""
+    new_Xs = []
     for i in range(len(Xs)):
-        Xs[i] = np.median(Xs[max(0, i - int(window_size / 2)) : min(len(Xs), i + int(window_size / 2))])
-    return Xs
+        new_Xs.append(np.median(Xs[max(0, i - int(window_size / 2)) : min(len(Xs), i + int(window_size / 2))]))
+    return new_Xs
 
 def f_bad2median(V_long, w, Error, raw_Vls, raw_ws, raw_Errors, past_len = 5, V_long_threshold = 10.0, w_threshold = 1.5):
     """sometimes, the optical flow method provides very bad measurement for ego_motion.

@@ -37,17 +37,17 @@ for rgb_test and full_test, we have a paramenter, show_img:
 
 def estimator_test(Path = REAL1, start_frame = 10, end_frame = 500, show_img = False):
     images, real_Vl, real_w, f, h, deltaT = du.full_parse(Path)
-    estimator = Estimators.OP_estimator(deltaT, h, f, images[start_frame])
+    estimator = Estimators.OP_estimator(deltaT = deltaT, h = h, f = f, start_image=images[start_frame], pre_filter_discard=3.0, pre_filter_size=10, past_fusion_size = 20, past_fusion_amplifier = 1.2, past_fusion_on= False)
     est_Vls, est_ws, est_errors = [], [], []
     for i in range(start_frame + 1, end_frame):
         nextImg = images[i]
-        est_Vl, est_w, cur_error = estimator.estimate_dev(nextImg)
+        est_Vl, est_w, cur_error = estimator.estimate(nextImg)
         est_Vls.append(est_Vl)
         est_ws.append(est_w)
         est_errors.append(cur_error)
 
-    # est_Vls = em.median_filter(est_Vls)
-    # est_ws = em.median_filter(est_ws)
+    est_Vls = em.median_filter(est_Vls)
+    est_ws = em.median_filter(est_ws)
 
     f, (ax1, ax2, ax3) = plt.subplots(1, 3)
     ax1.plot(real_Vl[start_frame : end_frame], label = "real_Vl")
