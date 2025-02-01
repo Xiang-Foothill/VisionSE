@@ -18,7 +18,7 @@ In this project, we choose to apply Lucas-Kanade Method to calculate optical flo
 The green arrows in the image above represents the optical flow values at its correponding pixels, which is very informative about the relative motion between the surround envrionment and the ego-vehicle.
 
 ### 2. Longuet-Higgins and Prazdny’s motion field model
-Based on the assumption that the ground is flat, and the Longuet-Higgins and Prazdny's motion field model, we can now formulate the relationship between real-world egomotion $V_long$ $w$ and the pixel system motion U_x U_y.
+Based on the assumption that the ground is flat, and the Longuet-Higgins and Prazdny's motion field model, we can now formulate the relationship between real-world egomotion V_long, w and the pixel system motion U_x U_y.
 For all the points on the flat ground, their ego-motion and motion field satisfies the following relationship:
    
 ![motion_model](https://github.com/user-attachments/assets/f3d745bb-4da5-4663-a56d-43e427c5442e)
