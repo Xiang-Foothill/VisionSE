@@ -8,7 +8,7 @@ import video_utils as vu
 class OP_estimator:
     """estimator class for optical flow estimation"""
 
-    def __init__(self, deltaT, h, f, pre_filter_size = 5, pre_filter_discard = 3.0, past_fusion_on = True, past_fusion_size = 10.0, past_fusion_amplifier = 1.5, start_image = None):
+    def __init__(self, deltaT, h, f, pre_filter_size = 10, pre_filter_discard = 10.0, past_fusion_on = False, past_fusion_size = 10, past_fusion_amplifier = 1.5, start_image = None):
 
         self.f = f
         self.h = h
@@ -75,5 +75,5 @@ class OP_estimator:
         keep_size = int(max(self.past_fusion_size, self.pre_filter_size)) + 5
         if len(raw_Vls) > keep_size:
             raw_Vls, raw_ws, raw_Errors = raw_Vls[- keep_size : ], raw_ws[- keep_size : ], raw_Errors[- keep_size : ]
-            
+
         return final_V_long, final_w, final_error

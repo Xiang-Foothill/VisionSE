@@ -51,8 +51,8 @@ def play_game(upper_ticks = 500, deltaT = 0.04):
     clear_world(world)
     f, (ax1, ax2) = plt.subplots(1, 2)
 
-    world.data["estimated_Vl"] = em.median_filter(world.data["estimated_Vl"])
-    world.data["estimated_w"] = em.median_filter(world.data["estimated_w"])
+    # world.data["estimated_Vl"] = em.median_filter(world.data["estimated_Vl"])
+    # world.data["estimated_w"] = em.median_filter(world.data["estimated_w"])
     ax1.plot(world.data["real_Vl"], label = "real_Vl")
     ax1.plot(world.data["estimated_Vl"], label = "est_vl")
     ax1.set_xlabel("frame number")

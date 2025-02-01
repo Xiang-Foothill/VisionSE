@@ -46,8 +46,8 @@ def estimator_test(Path = REAL1, start_frame = 10, end_frame = 500, show_img = F
         est_ws.append(est_w)
         est_errors.append(cur_error)
 
-    est_Vls = em.median_filter(est_Vls)
-    est_ws = em.median_filter(est_ws)
+    # est_Vls = em.median_filter(est_Vls)
+    # est_ws = em.median_filter(est_ws)
 
     f, (ax1, ax2, ax3) = plt.subplots(1, 3)
     ax1.plot(real_Vl[start_frame : end_frame], label = "real_Vl")
