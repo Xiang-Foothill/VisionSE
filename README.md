@@ -2,7 +2,9 @@
 VisionSE is an open-sourced library of a pure-vision estimator for the motion state of an ego-vehicle. By applying optical flow measurements to consecutive image frames, such an estimator can peform motion-state estimations relying only on the input RGB data from a windshield camera attached to the vehicle. If you are interested in the technical details for the implementation for this project, please visit the website: https://xiang-foothill.github.io/VisionSEWeb/webpage5.html 
 
 # Problem Formulating
-Consider an ego-vehicle that moves on a flat road. Suppose that we have enough lightness in the environment to ensure a decent vision. A camera is attached to its front windshield, and the camera remains relatively still to the car. Since the road is relatively flat, we can assume that the optical axis is parallell to the ground. The camera samples images with a frequency around 24HZ. Each time when the windshiled camera sampled a new image, now the estimator can make use of the input image to estimate the vheicle's **V_long**, and **w** (longitudinal velocity and angular velocity).
+Consider an ego-vehicle that moves on a flat road. Suppose that we have enough lightness in the environment to ensure a decent vision. A camera is attached to its front windshield, and the camera remains relatively still to the car. Since the road is relatively flat, we can assume that the optical axis is parallell to the ground. The camera samples images with a frequency around 24HZ. Each time when the windshiled camera sampled a new image, now the estimator can make use of the input image to estimate the vheicle's **V_long**, and **w** (longitudinal velocity and angular velocity).  
+
+
 
 # Packages Required
 The scripts in this library made use of the following packages:
