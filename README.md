@@ -18,14 +18,13 @@ In this project, we choose to apply Lucas-Kanade Method to calculate optical flo
 The green arrows in the image above represents the optical flow values at its correponding pixels, which is very informative about the relative motion between the surround envrionment and the ego-vehicle.
 
 ### 2. Longuet-Higgins and Prazdny’s motion field model
-Based on the assumption that the ground is flat, and the Longuet-Higgins and Prazdny's motion field model, we can now formulate the relationship between real-world egomotion $V_long$ $w$ and the pixel system motion $U_x$ $U_y$.
+Based on the assumption that the ground is flat, and the Longuet-Higgins and Prazdny's motion field model, we can now formulate the relationship between real-world egomotion $V_long$ $w$ and the pixel system motion U_x U_y.
 For all the points on the flat ground, their ego-motion and motion field satisfies the following relationship:
    
-${U_x}_i = \frac{x_iy_i}{fh} * V_long + (f + \frac{x_i^2}{f}) * w (1)$  
+![motion_model](https://github.com/user-attachments/assets/f3d745bb-4da5-4663-a56d-43e427c5442e)
 
-${U_y}_i = \frac{y_i^2}{fh} * V_long + (f + \frac{x_iy_i}{f}) * w (2)$
 
-In the equation above, $U_x$ and $U_y$ are the x component and y-component of the motion field value for a single pixel, indexed as i. $x_i$ and $y_i$ denote the x and y coordinate for the pixel on the image plane. $f$ is the focal length and $h$ is the height of the camera from the ground.
+In the equation above, U_x and U_y are the x component and y-component of the motion field value for a single pixel, indexed as i. x_i and y_i denote the x and y coordinate for the pixel on the image plane. f is the focal length and h is the height of the camera from the ground.
 
 ### 3. Least Square Regression
 
@@ -33,22 +32,25 @@ By applying the Lucas-Kanade Method and its corresponding ideal assumption, we c
 - lack of diversity of pixel intensity gradients in the selected pixel's neighborhood
 - sudden change of color pattern in the environment
 - Low frequency of image sampling rate  
-Denote the optical flow values obtained from Lucas-Kanade Method as ${{U_x}_i'}$ and ${{U_y}_i'}$, which differs from the real motion field values by some noisy terms $\delta_x$ and $\delta_y$.
+Denote the optical flow values obtained from Lucas-Kanade Method as U_xi and U_yi, which differs from the real motion field values by some noisy terms.
 Now we can formulate two optimization problem in terms of least square:
 ![Optimization_formula](https://github.com/user-attachments/assets/9514b303-98a2-4515-bc8d-51fcf6dc092e)
 
-To better understand the optimization problem above, we can interpret it as a simple learning problem, where ${{U_x}_i'}$ and  ${{U_y}_i'}$ are the labels. Terms like, $\frac{x_iy_i}{fh}$,  $\frac{x_i^2}{f})$, $\frac{y_i^2}{fh}$, and $(f + \frac{x_iy_i}{f})$ are the data poitns corresponding to the labels, and $V_long$ and $w$ are the parameters of the function to be learned.  
-After finding the optimized values for ${V_long}_x$, $w_x$ (the values from the optimization problem of x-diretction motion field) and ${V_long}_y$, $w_y$ (the values from the optimiztation problem of y-direction motion field), we average the results from the two optimization problems to find the final answer.
+To better understand the optimization problem above, we can interpret it as a simple learning problem, where U_xi and U_yi are the labels. All other terms can be viewed as the data poitns corresponding to the labels, and V_long and w are the parameters of the function to be learned.  
+After finding the optimized values for V_longx, w_x (the values from the optimization problem of x-diretction motion field) and V_longy, w_y (the values from the optimiztation problem of y-direction motion field), we average the results from the two optimization problems to find the final answer.
 
 # Optimization functions
 ### 1. Pre-filter
 As mentioned above, we treat the ego-motion estimation process as a regression problem, where each pixel works as a data point and the motion values at the frame are the parameters that are going to be figured out. Then, a natural question will be: how can we remove the outliers from the data points to make such estimation as accurate as possible?  
 
-Some pixel points in the image may provide catastrophic measurements for flow values because of the lack of texture variety in its surrounding neighborhood or a sudden change in the nearby light sources. To remove these pixels and their corresponding flows from our data, we apply the ego-motion information of the vehicles from near history (in recent 0.1 seconds) to form an approximation for the current ego-motion, $Vl_{past}$ $w_{past}$. As motion state of the ego-vehicle will remain relatively stable in a very short time period, such an estimation is accurate enough to form an approximation to remove obvious outliers in the data points.  
+Some pixel points in the image may provide catastrophic measurements for flow values because of the lack of texture variety in its surrounding neighborhood or a sudden change in the nearby light sources. To remove these pixels and their corresponding flows from our data, we apply the ego-motion information of the vehicles from near history (in recent 0.1 seconds) to form an approximation for the current ego-motion, Vl_past w_past. As motion state of the ego-vehicle will remain relatively stable in a very short time period, such an estimation is accurate enough to form an approximation to remove obvious outliers in the data points.  
 
-These motion values based on history is then plugged in equation (1) and (2) to give an approximation for the flow values of each pixels at the current frame, ${U_x}_i', {U_y}_i'$ With such approxmation for the flow values, we can then judge whether the measurement of flow value given by each pixel is good or not.  
-$Q_i = \frac{|{U_x}_i' - {U_x}_i|}{|{U_x}_i'|} + \frac{|{U_y}_i' - {U_y}_i|}{|{U_y}_i'|} \forall i$  
-The value $Q_i$ is a measure of the pixel's quality. It shows how close the flow value estimated by the pixel in the current frame is to the approximation made by the history information. If this value is higher than a user-defined thershold, i.e. such a flow is way too far from the history approximation, we will exclude such a pixel from regression.
+These motion values based on history is then plugged in equation (1) and (2) to give an approximation for the flow values of each pixels at the current frame, U_xi', U_yi' With such approxmation for the flow values, we can then judge whether the measurement of flow value given by each pixel is good or not.  
+
+![quality_factor](https://github.com/user-attachments/assets/311bd187-597b-46f6-9156-b69ed2994392)
+
+
+The value Q_i is a measure of the pixel's quality. It shows how close the flow value estimated by the pixel in the current frame is to the approximation made by the history information. If this value is higher than a user-defined thershold, i.e. such a flow is way too far from the history approximation, we will exclude such a pixel from regression.
 To avoid the current measurement from overly converging to the hisotry, the filtered estimation will not be used as history information for future filtering. All the history information for filtering is ego-motion measurements without any optimization method.
 
 ### 2. Past-fusion
