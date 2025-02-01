@@ -86,7 +86,7 @@ def spawn_vehicle(world):
     blueprint = blueprint_library.find("vehicle.audi.a2")
     world_map = world.get_map()
     spawn_points = world_map.generate_waypoints(distance = 0.5)
-    np.random.seed(14) # set the value of the seed so that the experiment is repeatable
+    np.random.seed(10) # set the value of the seed so that the experiment is repeatable
     point_index = np.random.randint(low = 0, high = len(spawn_points))
     ego = world.spawn_actor(blueprint, spawn_points[point_index].transform)
 
