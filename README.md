@@ -8,27 +8,6 @@ To overcome this flaw(unstability when we don't have enough good features to tra
 # Problem Formulating
 Consider an ego-vehicle that moves on a flat road. Suppose that we have enough lightness in the environment to ensure a decent vision. A camera is attached to its front windshield, and the camera remains relatively still to the car. Since the road is relatively flat, we can assume that the optical axis is parallell to the ground. The camera samples images with a frequency around 24HZ. All the information we have is the image sequences, now we need to use the images to estimate the vheicle's **V_long**, and **w**. 
 
-# Experiment Result
-### Pure-Vision Method in ideal scenario  
-Flow digram from the windshield camera  
-![pure_vision_ideal_flow](https://github.com/user-attachments/assets/13334ba9-fe96-4887-a93a-e6c1a560e6b2)
-  
-Experiment result  
-<img width="755" alt="pure_vision_ideal_result" src="https://github.com/user-attachments/assets/8acfd583-2e4a-4c7b-bee1-864a5e001f6e" />
-
-### Pure-Vision Method in general scenario
-Flow digram from the windshield camera  
-![real_flow](https://github.com/user-attachments/assets/4489ecfc-066c-4713-83e5-74591e84ab39)
-
-  
-Experiment result  
-![pure_vision_real](https://github.com/user-attachments/assets/b296c0fa-82f8-4720-9e7e-a8e3feeb190c)
-
-
-### Fusion of Pure-vision Method and IMU Estimation in general scenario
-Experiment result   
-![fusion_real_result](https://github.com/user-attachments/assets/2044b889-4258-4ae1-9598-d4fdb674eb88)
-
 # Methodology
 ### 1. Optical flow and Lucas-Kanade Method
 Optical flow is the apparent changes that we observe in the brightness pattern as the surrounding environment changes. In an ideal situation, optical flow should be the same as the motion field, the projection of the surrounding environment's relative motion onto the image plane.  
@@ -76,20 +55,41 @@ To avoid the current measurement from overly converging to the hisotry, the filt
 Similar to the idea of pre-filter, we can treat the history measurements of the vehicle's ego-motion as a sensor independentfrom the current frame. Then, we can apply simple complementary sensor fusion function to the history information and the current measurement.
 Again, the history information we use here is the measurements without any optimization methods.
 ![optical_flow_flow_chart](https://github.com/user-attachments/assets/31155f1d-4e37-42ad-b5c1-7b4e227de4da)
-
-
  
-
 ### 3. Fusion with IMU
 As we can see in the experiment result above, when the car is driving in a scenario with few good features to track, optical flow becomes very usntable. We can interpret such unstability as a kind of low-frequency noise with high magnitude(extreme driving scenario appears with a low frequency, but as long as such scenario apepars, optical flow will be totally out of work). In comparison, if we only rely IMU sensor to estimate the ego-motion, we will see some high-frequency noise with low-magnitude. Such opposite natures of noises in pure-vision estimations and imu estimations make them perfect complementary sensors, which can be fused together.  
 ![flow_chart](https://github.com/user-attachments/assets/a4cb30b9-9273-48d9-9f99-04afcf5f85e3)
+
+# Experiment Result
+### Pure-Vision Method in ideal scenario  
+Flow digram from the windshield camera  
+![pure_vision_ideal_flow](https://github.com/user-attachments/assets/13334ba9-fe96-4887-a93a-e6c1a560e6b2)
+  
+Experiment result  
+<img width="755" alt="pure_vision_ideal_result" src="https://github.com/user-attachments/assets/8acfd583-2e4a-4c7b-bee1-864a5e001f6e" />
+
+### Pure-Vision Method in general scenario
+Flow digram from the windshield camera  
+![real_flow](https://github.com/user-attachments/assets/4489ecfc-066c-4713-83e5-74591e84ab39)
+
+  
+Experiment result with only the estimation from optical flow presented   
+![pure_vision_real](https://github.com/user-attachments/assets/33fca6cc-30d1-4c7f-9e28-c1a4f164efdf)
+
+Experiment result with an extra median filter applied  
+![pure_vision_real_median](https://github.com/user-attachments/assets/21832bd0-3352-4600-8200-4f40f4ad815e)
+
+
+### Fusion of Pure-vision Method and IMU Estimation in general scenario
+Experiment result   
+![fusion_real_result](https://github.com/user-attachments/assets/2044b889-4258-4ae1-9598-d4fdb674eb88)
 
 # Advantages of this algorithm
 - No need to any external assistance such as GPS
 - No need for any pre-knowledge about the driving scenario
 - No need for training with data
 - Absolute explainability. Unlike network or other data-driven methods that are more prevalent nowadays, the whole motion field model is completely explanable in the traditional computer-vision knowledge framework. Any defects or disadvantages of its performance can be tracked back to the theoretical level.
-
+- 
 ### Contact
 All the descriptions above are a brief summation of the key ideas of my work. There are many details in the codes and tedious optimization functions used in this project. If you are Interested in the details of this project, feel free to email:  
 liu.yx@berkeley.edu
