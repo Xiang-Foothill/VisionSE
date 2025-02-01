@@ -59,4 +59,11 @@ Vl, w, error = estimator.estimate(input_image)
 `Egomotion Estimation Regression FAILED !!!!!!!!!!!! f_extreme called`  
 such a message will be called in the terminal if the current measurement through optical flow failed, i.e. the optical flow measurement is very unstable in the current frame. In this situation, the estimator will make use of the motion estimations in the near history as an emergency backup. The returned `vl`, `w` will be the median values among a certain number of past steps, and the error will also be calculated according to the history information.
 
+## Test Script
+In the repo, there is a CARLA test script that can directly be conducted in any CARLA driving scenario. Such a script uses the estimator to measure the motion state of a ego vehicle in CARLA driving environment. To try out the scirpt, switch to the repo's directory on your device and launch CARLA together with your driving scenario, and run the command:  
+`python carlaTest.py`
+
+# Contributor:
+Yuxiang Liu, MPC Lab, Berkeley, liu.yx@berkeley.edu  
+Shengfan Cao, MPC Lab, Berekeley, shengfan_cao@berkeley.edu
 
