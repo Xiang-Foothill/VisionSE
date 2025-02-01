@@ -91,7 +91,7 @@ Experiment result
 - No need for any pre-knowledge about the driving scenario
 - No need for training with data
 - Absolute explainability. Unlike network or other data-driven methods that are more prevalent nowadays, the whole motion field model is completely explanable in the traditional computer-vision knowledge framework. Any defects or disadvantages of its performance can be tracked back to the theoretical level.
-- 
+
 ### Contact
 All the descriptions above are a brief summation of the key ideas of my work. There are many details in the codes and tedious optimization functions used in this project. If you are Interested in the details of this project, feel free to email:  
 liu.yx@berkeley.edu
