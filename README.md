@@ -4,7 +4,7 @@ VisionSE is an open-sourced library of a pure-vision estimator for the motion st
 # Problem Formulating
 Consider an ego-vehicle that moves on a flat road. Suppose that we have enough lightness in the environment to ensure a decent vision. A camera is attached to its front windshield, and the camera remains relatively still to the car. Since the road is relatively flat, we can assume that the optical axis is parallell to the ground. The camera samples images with a frequency around 24HZ. Each time when the windshiled camera sampled a new image, now the estimator can make use of the input image to estimate the vheicle's **V_long**, and **w** (longitudinal velocity and angular velocity).  
 
-
+https://github.com/user-attachments/assets/74e57e5e-d365-44eb-9577-050d621862f6
 
 # Packages Required
 The scripts in this library made use of the following packages:
