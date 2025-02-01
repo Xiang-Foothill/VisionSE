@@ -39,10 +39,22 @@ Vl, w, error = estimator.estimate(input_image)
 **NOTE: parameters below are used for internal optimization functions, if you are not interested in their details, please just use the default values which have been calibrated**
 
 - `pre_filter_size`: such an estimator will make use of the information of the vehicle's motion states in near history to filter out some obvious bad optical flow measurements. This paramter decides how many previous steps will the estimator use to make filtering. For example, if it is set to 3, the estimator will use last 3 images passed into this estimator for current measurement. By default, such a value is set to 10. For more details about the implementation of this filter, please visit webpage in the introduction section.
-- `pre_filter_discard`: the threshold for the prefilter to judge a pixel as a point with bad optical flow measurement. Generally, if the threshold is set lower, more pixel points will be dropped in the final estimation stage, and it will be more likely that final regression failed. By default, this is set to 10.0.
+- `pre_filter_discard`: the threshold for the prefilter to judge a pixel as a point with bad optical flow measurement. Generally, if the threshold is set lower, more pixel points will be dropped in the final estimation stage, and it will be more likely that final regression failed. By default, this is set to 8.0.
 -  `past_fusion_on`: a boolean value for whether to turn on the past fusor or not. If it is true, the past fusor is turned on. If it is false, the past fusor is off. A past fusor is a fusion function that treats the ego-motion estimations from near history as an independent sensor. It will fuse such past information with current measurement. By default, such a value will be set to false.
 -  `past_fusion_size`: how many last steps the past fusor is going to take. If `past_fusion_on` is set to false, such a parameter can be ignored. By default, it is set to 10.
 -  `past_fusion_amplifier`: when doing past fusion, the estimator fuses the current measurement with past history based on their errors. Since the past history will always differ from the current measurement as the time progresses forward, the errors from the past history needs to be amplified. This parameter specifies how many times the errors are going to be amplified. By default, it is set to 1.5. If `past_fusion_on` is set to false, such a parameter can be ignored.
 
+### `estimate()`
+**INPUT**  
+`nextImg`: the instantaneous image sampled from the windshield camera. The image should have the shape, [HEIGHT, WIDTH, CAHNNEL], where both RGB channel and GBR channels are compatible  
+
+**OUTPUT = vl, w, error**
+`vl`: measured longitudinal velocity in meter per second  
+`w`: measured angular velocity in radius per second  
+`error`: the error of such an estimation. It is measured through the average of all the taken pixels' minimum eigenvalues in the current frame.  
+
+**ERROR MESSAGE**  
+`Egomotion Estimation Regression FAILED !!!!!!!!!!!! f_extreme called`  
+such a message will be called in the terminal if the current measurement through optical flow failed, i.e. the optical flow measurement is very unstable in the current frame. In this situation, the estimator will make use of the motion estimations in the near history as an emergency backup. The returned `vl`, `w` will be the median values among a certain number of past steps, and the error will also be calculated according to the history information.
 
 
