@@ -8,7 +8,7 @@ import video_utils as vu
 class OP_estimator:
     """estimator class for optical flow estimation"""
 
-    def __init__(self, deltaT, h, f, pre_filter_size = 10, pre_filter_discard = 10.0, past_fusion_on = False, past_fusion_size = 10, past_fusion_amplifier = 1.5, start_image = None):
+    def __init__(self, deltaT, h, f, pre_filter_size = 10, pre_filter_discard = 8.0, past_fusion_on = False, past_fusion_size = 10, past_fusion_amplifier = 1.5, start_image = None):
 
         self.f = f
         self.h = h
