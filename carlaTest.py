@@ -13,53 +13,6 @@ sys.path.insert(0,'C:/carla/PythonAPI/carla')
 from agents.navigation.basic_agent import BasicAgent
 from agents.navigation.constant_velocity_agent import ConstantVelocityAgent
 
-def make_video(upper_ticks = 500, deltaT = 0.04, path = "E:/VisionSE/VideoSet/video2.avi"):
-
-    # prepare the world and the client
-    client = carla.Client('localhost', 2000)
-    world = client.get_world()
-    world.actor_list = []
-    client.set_timeout(10.0)
-    
-    world.data = {}
-    world.data["T"] = deltaT
-    world.data["real_Vl"] = []
-    world.data["real_w"] = []
-    world.data["estimated_Vl"] = []
-    world.data["estimated_w"] = []
-    world.data["images"] = []
-
-    ego = spawn_vehicle(world)
-
-    world.estimator = Estimators.OP_estimator(deltaT = world.data["T"], h = world.data["sensor_height"], f = world.data["F"], pre_filter_discard=6.0, pre_filter_size=10, past_fusion_size = 20, past_fusion_amplifier = 1.2, past_fusion_on= True)
-
-     # set the world to the synchronous mode
-    settings = world.get_settings()
-    settings.synchronous_mode = True
-    settings.fixed_delta_seconds = world.data["T"] # !!!! Note: to avoid the error of carla simulation, try to set the sensor_tick time as the same value as the world_tick time
-    world.apply_settings(settings)
-
-    set_spectator(world)
-
-    # To start a basic agent
-    agent = BasicAgent(ego)
-
-    while True:
-        ego.apply_control(agent.run_step())
-        updata_spectator(world)
-        world.tick()
-
-        if judge_end(world, upper_ticks):
-            break
-    
-    size = (640, 480)
-    result = cv2.VideoWriter(path,  
-                         cv2.VideoWriter_fourcc(*'MJPG'), 
-                         int(1 / deltaT), size)
-
-    for im in world.data["images"]:
-        result.write(im)
-
 def play_game(upper_ticks = 500, deltaT = 0.04):
     # prepare the world and the client
     client = carla.Client('localhost', 2000)
@@ -192,7 +145,7 @@ def make_exp_recall(world):
 
         world.data["real_Vl"].append(real_V)
         world.data["real_w"].append(real_omega)
-        est_Vl, est_w, error = world.estimator.estimate_drawing(IM_array, world.data["images"])
+        est_Vl, est_w, error = world.estimator.estimate(IM_array)
         world.data["estimated_Vl"].append(est_Vl)
         world.data["estimated_w"].append(est_w)
 
@@ -209,7 +162,7 @@ def findFocal(sensor):
     return F
 
 def main():
-    make_video(1000, 0.04)
+   play_game(1000, 0.04)
 
 if __name__ == "__main__":
     main()
